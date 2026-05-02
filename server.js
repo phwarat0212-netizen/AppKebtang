@@ -15,7 +15,7 @@ const io = new Server(server, {
   }
 });
 
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
 app.use(cors());
 app.use(bodyParser.json());
@@ -30,11 +30,8 @@ io.on('connection', (socket) => {
 
 // Initialize SQLite database
 const fs = require('fs');
-const dataDir = path.resolve(__dirname, '.data');
-if (!fs.existsSync(dataDir)) {
-  fs.mkdirSync(dataDir);
-}
-const dbPath = path.resolve(dataDir, 'database.db');
+const dbPath = path.resolve('/tmp', 'database.db');
+console.log('Database path:', dbPath);
 
 const db = new sqlite3.Database(dbPath, (err) => {
   if (err) {
