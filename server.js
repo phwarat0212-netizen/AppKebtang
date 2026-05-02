@@ -29,7 +29,13 @@ io.on('connection', (socket) => {
 });
 
 // Initialize SQLite database
-const dbPath = path.resolve(__dirname, 'database.db');
+const fs = require('fs');
+const dataDir = path.resolve(__dirname, '.data');
+if (!fs.existsSync(dataDir)) {
+  fs.mkdirSync(dataDir);
+}
+const dbPath = path.resolve(dataDir, 'database.db');
+
 const db = new sqlite3.Database(dbPath, (err) => {
   if (err) {
     console.error('Error opening database', err.message);
