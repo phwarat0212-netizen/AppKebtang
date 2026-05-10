@@ -1,4 +1,4 @@
-# AppKebtang
+﻿# AppKebtang
 
 แอปพลิเคชันบันทึกรายรับ-รายจ่าย (Expense Tracker)
 
@@ -9,8 +9,11 @@
 เวอร์ชันนี้มุ่งเน้นการยกระดับความปลอดภัยให้เป็นไปตามมาตรฐานความปลอดภัยทางไซเบอร์สากล เพื่อปกป้องข้อมูลส่วนตัวและรักษาความเป็นส่วนตัวของผู้ใช้สูงสุด
 
 ### 🛠️ สิ่งที่ได้รับการปรับปรุงตามมาตรฐาน
+- **Password Hashing (bcrypt)**: เข้ารหัสลับรหัสผ่าน ปลอดภัยแม้ฐานข้อมูลรั่วไหล
+- **JWT Authentication**: ยืนยันตัวตนผ่านระบบ Token ที่ปลอดภัยสูง
+- **IDOR Protection**: ระบบตรวจสอบสิทธิ์การเข้าถึงข้อมูลรายบุคคล
+- **Admin Security**: ยกระดับการป้องกันหน้าแอดมินและข้อมูลผู้ใช้
 
-### ⚠️ การแก้ไขช่องโหว่จากเวอร์ชันก่อนหน้า
 ---
 
 ## 🚀 อัปเดต v2.0.0 (ก่อนหน้า)
@@ -22,14 +25,16 @@
 
 ## 📥 ดาวน์โหลด (Download)
 
-[![Download Latest APK](https://img.shields.io/github/v/release/phwarat0212-netizen/AppKebtang?label=Download%20APK&style=for-the-badge&logo=android&color=00C896)](https://github.com/phwarat0212-netizen/AppKebtang/releases/latest)
+คุณสามารถดาวน์โหลดไฟล์ติดตั้ง (.apk) เวอร์ชันล่าสุดได้ที่นี่:
 
-กดปุ่มด้านบนเพื่อไปยังหน้าดาวน์โหลดเวอร์ชันล่าสุด หรือเข้าตรงที่ [Releases page](https://github.com/phwarat0212-netizen/AppKebtang/releases/latest)
+👉 **[ดาวน์โหลด Kebtang v2.0.2 APK](https://github.com/phwarat0212-netizen/AppKebtang/releases/download/v2.0.2/kebtang-v2.0.2.apk)**
 
-### วิธีติดตั้ง
-1. ดาวน์โหลดไฟล์ `.apk` จากหน้า Releases
-2. เปิดไฟล์บนมือถือ Android — อาจต้องอนุญาต "Install from unknown sources"
-3. กดติดตั้ง
+หรือเลือกดาวน์โหลดเวอร์ชันอื่นๆ ได้ที่ [Releases page](https://github.com/phwarat0212-netizen/AppKebtang/releases)
+
+### 📱 วิธีติดตั้ง
+1. ดาวน์โหลดไฟล์ `kebtang-v2.0.2.apk` ลงในมือถือ Android
+2. หากติดตั้งไม่ได้ ให้ไปที่ "ตั้งค่า" (Settings) > "ความปลอดภัย" (Security) > อนุญาต "ติดตั้งแอปจากแหล่งที่ไม่รู้จัก" (Install unknown apps)
+3. หากมีเวอร์ชันเก่าอยู่ในเครื่อง **ต้องลบแอปเก่าออกก่อน** จึงจะติดตั้งเวอร์ชันใหม่ได้
 
 ---
 *พัฒนาภายใต้มาตรฐานความปลอดภัย OWASP & NIST*
