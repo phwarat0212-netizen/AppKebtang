@@ -36,7 +36,7 @@
 
 ## 📥 ดาวน์โหลด (Download)
 
-* [ดาวน์โหลดไฟล์ APK (Kebtang-v2.0.1.apk)](https://github.com/phwarat0212-netizen/AppKebtang/raw/main/kebtang/build/app/outputs/flutter-apk/app-release.apk) (เวอร์ชันล่าสุดที่มีความปลอดภัยสูง)
+* [ดาวน์โหลดไฟล์ APK (Kebtang-v2.0.1.apk)](https://github.com/phwarat0212-netizen/AppKebtang/releases/latest) (เวอร์ชันล่าสุดที่มีความปลอดภัยสูง)
 
 ---
 *พัฒนาโดย ❤️ ทีมงาน Kebtang (มาตรฐานความปลอดภัย OWASP)*
