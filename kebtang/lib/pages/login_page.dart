@@ -70,14 +70,16 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         final token = data['token'];
-        
+        final role = (data['role'] as String?) ?? 'user';
+
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('saved_user', user);
-        await prefs.setString('user_token', token);
+        await prefs.setString('user_role', role);
+        await SecureTokenStorage.write(token);
 
         if (!mounted) return;
-        
-        if (user == 'admin') {
+
+        if (role == 'admin') {
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(builder: (_) => const AdminPage()),

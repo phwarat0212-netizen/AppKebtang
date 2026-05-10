@@ -85,7 +85,13 @@ class AppState extends ChangeNotifier {
         Uri.parse('$_baseUrl/transactions/$_username'),
         headers: headers,
       ).timeout(const Duration(seconds: 60));
-      
+
+      if (ApiConfig.handleAuthError(response)) {
+        _loaded = true;
+        notifyListeners();
+        return;
+      }
+
       if (response.statusCode == 200) {
         final List<dynamic> decoded = jsonDecode(response.body);
         final backendTransactions = decoded.map((e) => Transaction.fromJson(e)).toList();

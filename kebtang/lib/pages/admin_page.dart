@@ -77,6 +77,11 @@ class _AdminPageState extends State<AdminPage> with SingleTickerProviderStateMix
         headers: headers,
       );
 
+      if (ApiConfig.handleAuthError(transRes) || ApiConfig.handleAuthError(usersRes)) {
+        if (mounted) setState(() => _isLoading = false);
+        return;
+      }
+
       if (transRes.statusCode == 200 && usersRes.statusCode == 200) {
         setState(() {
           _transactions = jsonDecode(transRes.body);
@@ -98,7 +103,11 @@ class _AdminPageState extends State<AdminPage> with SingleTickerProviderStateMix
   }
 
   Future<void> _deleteUser(String username) async {
-    if (username == 'admin') return;
+    final target = _users.firstWhere(
+      (u) => u['username'] == username,
+      orElse: () => <String, dynamic>{},
+    );
+    if (target['role'] == 'admin') return;
     
     final confirm = await showDialog<bool>(
       context: context,
@@ -383,7 +392,7 @@ class _AdminPageState extends State<AdminPage> with SingleTickerProviderStateMix
       itemCount: _users.length,
       itemBuilder: (context, i) {
         final u = _users[i];
-        final isAd = u['username'] == 'admin';
+        final isAd = u['role'] == 'admin';
         final isDark = Theme.of(context).brightness == Brightness.dark;
         
         return ListTile(
@@ -677,7 +686,7 @@ class _AdminPageState extends State<AdminPage> with SingleTickerProviderStateMix
           const SizedBox(height: 32),
           Text(langState.t('user_summary'), style: titleStyle),
           const SizedBox(height: 16),
-          ..._users.where((u) => u['username'] != 'admin').map((u) => _buildUserStatCard(u, filteredTrans)),
+          ..._users.where((u) => u['role'] != 'admin').map((u) => _buildUserStatCard(u, filteredTrans)),
         ],
       ),
     );

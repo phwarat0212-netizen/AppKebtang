@@ -13,19 +13,34 @@ const rateLimit = require('express-rate-limit');
 const app = express();
 const server = http.createServer(app);
 
+// Trust the first proxy (Render/Railway terminate TLS upstream).
+// Required so express-rate-limit sees the real client IP from X-Forwarded-For.
+app.set('trust proxy', 1);
+
+// Allowed CORS origins — comma-separated list in env (e.g. "https://admin.kebtang.com,https://kebtang.com").
+// Empty by default: mobile clients don't send Origin and aren't affected; browsers from unlisted origins are blocked.
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || '')
+  .split(',')
+  .map(o => o.trim())
+  .filter(Boolean);
+
+const corsOptions = {
+  origin: (origin, cb) => {
+    // Requests without an Origin header (mobile apps, curl, server-to-server) are allowed.
+    if (!origin) return cb(null, true);
+    if (ALLOWED_ORIGINS.includes(origin)) return cb(null, true);
+    return cb(new Error('Origin not allowed by CORS'));
+  },
+  methods: ['GET', 'POST', 'PUT', 'DELETE']
+};
+
 // Security Middlewares
 app.use(helmet()); // Set security-related HTTP headers
-app.use(cors({
-  origin: '*', // In production, replace with specific domain
-  methods: ['GET', 'POST', 'PUT', 'DELETE']
-}));
-app.use(bodyParser.json());
+app.use(cors(corsOptions));
+app.use(bodyParser.json({ limit: '32kb' }));
 
 const io = new Server(server, {
-  cors: {
-    origin: '*',
-    methods: ['GET', 'POST', 'PUT', 'DELETE']
-  }
+  cors: corsOptions
 });
 
 const PORT = process.env.PORT || 3000;
@@ -81,7 +96,7 @@ const authenticateToken = (req, res, next) => {
 };
 
 const isAdmin = (req, res, next) => {
-  if (req.user && req.user.username === 'admin') {
+  if (req.user && req.user.role === 'admin') {
     next();
   } else {
     res.status(403).json({ error: 'Access denied. Admin rights required.' });
@@ -99,7 +114,8 @@ io.on('connection', (socket) => {
 // Mongoose Schemas and Models
 const userSchema = new mongoose.Schema({
   username: { type: String, required: true, unique: true },
-  password: { type: String, required: true }
+  password: { type: String, required: true },
+  role: { type: String, enum: ['user', 'admin'], default: 'user' }
 });
 
 const transactionSchema = new mongoose.Schema({
@@ -129,19 +145,27 @@ mongoose.connect(MONGODB_URI)
         throw new Error('DEFAULT_ADMIN_PASSWORD must be set before the initial admin user can be created.');
       }
       const hashedPassword = await bcrypt.hash(DEFAULT_ADMIN_PASSWORD, 10);
-      await User.create({ username: 'admin', password: hashedPassword });
+      await User.create({ username: 'admin', password: hashedPassword, role: 'admin' });
       console.log('Default admin created.');
-    } else if (DEFAULT_ADMIN_PASSWORD) {
-      let isMatch = false;
-      try {
-        isMatch = await bcrypt.compare(DEFAULT_ADMIN_PASSWORD, adminUser.password);
-      } catch (e) { isMatch = false; }
-
-      if (!isMatch) {
-        const hashedPassword = await bcrypt.hash(DEFAULT_ADMIN_PASSWORD, 10);
-        adminUser.password = hashedPassword;
+    } else {
+      // Backfill role for admin accounts created before the role field existed.
+      if (adminUser.role !== 'admin') {
+        adminUser.role = 'admin';
         await adminUser.save();
-        console.log('Admin password updated to match .env');
+        console.log('Admin role backfilled.');
+      }
+      if (DEFAULT_ADMIN_PASSWORD) {
+        let isMatch = false;
+        try {
+          isMatch = await bcrypt.compare(DEFAULT_ADMIN_PASSWORD, adminUser.password);
+        } catch (e) { isMatch = false; }
+
+        if (!isMatch) {
+          const hashedPassword = await bcrypt.hash(DEFAULT_ADMIN_PASSWORD, 10);
+          adminUser.password = hashedPassword;
+          await adminUser.save();
+          console.log('Admin password updated to match .env');
+        }
       }
     }
   })
@@ -149,15 +173,55 @@ mongoose.connect(MONGODB_URI)
     console.error('Error connecting to MongoDB:', err.message);
   });
 
+// --- Validation helpers ---
+const isNonEmptyString = (v, max) =>
+  typeof v === 'string' && v.length > 0 && v.length <= max;
+
+const isOptionalString = (v, max) =>
+  v === undefined || v === null || (typeof v === 'string' && v.length <= max);
+
+const validateUsernameFormat = (v) =>
+  typeof v === 'string' && /^[a-z0-9_]{3,30}$/.test(v);
+
+const validateTransactionPayload = (body, { requireId }) => {
+  const { id, title, amount, date, isIncome, category, note } = body || {};
+
+  if (requireId && !isNonEmptyString(id, 100)) {
+    return 'Invalid id (string, 1-100 chars required)';
+  }
+  if (!isNonEmptyString(title, 200)) {
+    return 'Invalid title (string, 1-200 chars required)';
+  }
+  if (typeof amount !== 'number' || !Number.isFinite(amount) || amount < 0 || amount > 1e12) {
+    return 'Invalid amount (finite number, 0 to 1e12)';
+  }
+  if (!isNonEmptyString(date, 64) || Number.isNaN(Date.parse(date))) {
+    return 'Invalid date (parseable ISO date string required)';
+  }
+  if (typeof isIncome !== 'boolean') {
+    return 'Invalid isIncome (boolean required)';
+  }
+  if (!isOptionalString(category, 100)) {
+    return 'Invalid category (string, max 100 chars)';
+  }
+  if (!isOptionalString(note, 1000)) {
+    return 'Invalid note (string, max 1000 chars)';
+  }
+  return null;
+};
+
 // API Routes
 
 // --- Auth Routes ---
 app.post('/api/register', registerLimiter, async (req, res) => {
-  const { username: rawUsername, password } = req.body;
-  const username = rawUsername ? rawUsername.toLowerCase() : '';
-  
-  if (!username || !password || password.length < 8) {
-    return res.status(400).json({ error: 'Username and password (min 8 chars) required' });
+  const { username: rawUsername, password } = req.body || {};
+  const username = typeof rawUsername === 'string' ? rawUsername.toLowerCase() : '';
+
+  if (!validateUsernameFormat(username)) {
+    return res.status(400).json({ error: 'Invalid username (3-30 chars, lowercase letters/digits/underscore only)' });
+  }
+  if (typeof password !== 'string' || password.length < 8 || password.length > 200) {
+    return res.status(400).json({ error: 'Invalid password (8-200 chars required)' });
   }
   
   try {
@@ -193,23 +257,13 @@ app.post('/api/login', loginLimiter, async (req, res) => {
       isMatch = false;
     }
 
-    // Fallback: Check if it's an old plaintext password
-    if (!isMatch && user.password === password) {
-      // Migrate to hashed password
-      const newHash = await bcrypt.hash(password, 10);
-      user.password = newHash;
-      await user.save();
-      isMatch = true;
-      console.log(`User ${username} migrated to hashed password.`);
-    }
-
     if (isMatch) {
       const token = jwt.sign(
-        { id: user._id, username: user.username },
+        { id: user._id, username: user.username, role: user.role || 'user' },
         JWT_SECRET,
-        { expiresIn: '7d' }
+        { expiresIn: '1d' }
       );
-      res.json({ message: 'Login successful', username: user.username, token });
+      res.json({ message: 'Login successful', username: user.username, role: user.role || 'user', token });
     } else {
       res.status(401).json({ error: 'Invalid credentials' });
     }
@@ -223,7 +277,7 @@ app.get('/api/transactions/:username', authenticateToken, async (req, res) => {
   const { username } = req.params;
   
   // Security check: User can only access their own data unless admin
-  if (req.user.username !== username && req.user.username !== 'admin') {
+  if (req.user.username !== username && req.user.role !== 'admin') {
     return res.status(403).json({ error: 'Unauthorized access to user data.' });
   }
   
@@ -247,10 +301,15 @@ app.get('/api/transactions/:username', authenticateToken, async (req, res) => {
 
 app.post('/api/transactions/:username', authenticateToken, async (req, res) => {
   const { username } = req.params;
-  const { id, title, amount, date, isIncome, category, note } = req.body;
-  
-  if (req.user.username !== username && req.user.username !== 'admin') {
+  const { id, title, amount, date, isIncome, category, note } = req.body || {};
+
+  if (req.user.username !== username && req.user.role !== 'admin') {
     return res.status(403).json({ error: 'Unauthorized access.' });
+  }
+
+  const validationError = validateTransactionPayload(req.body, { requireId: true });
+  if (validationError) {
+    return res.status(400).json({ error: validationError });
   }
 
   try {
@@ -276,7 +335,7 @@ app.post('/api/transactions/:username', authenticateToken, async (req, res) => {
 app.delete('/api/transactions/:username/:id', authenticateToken, async (req, res) => {
   const { username, id } = req.params;
   
-  if (req.user.username !== username && req.user.username !== 'admin') {
+  if (req.user.username !== username && req.user.role !== 'admin') {
     return res.status(403).json({ error: 'Unauthorized access.' });
   }
 
@@ -295,10 +354,15 @@ app.delete('/api/transactions/:username/:id', authenticateToken, async (req, res
 
 app.put('/api/transactions/:username/:id', authenticateToken, async (req, res) => {
   const { username, id } = req.params;
-  const { title, amount, date, isIncome, category, note } = req.body;
-  
-  if (req.user.username !== username && req.user.username !== 'admin') {
+  const { title, amount, date, isIncome, category, note } = req.body || {};
+
+  if (req.user.username !== username && req.user.role !== 'admin') {
     return res.status(403).json({ error: 'Unauthorized access.' });
+  }
+
+  const validationError = validateTransactionPayload(req.body, { requireId: false });
+  if (validationError) {
+    return res.status(400).json({ error: validationError });
   }
 
   try {
@@ -356,7 +420,13 @@ app.delete('/api/admin/transactions/:id', authenticateToken, isAdmin, async (req
 
 app.put('/api/admin/transactions/:id', authenticateToken, isAdmin, async (req, res) => {
   const { id } = req.params;
-  const { title, amount, date, isIncome, category, note } = req.body;
+  const { title, amount, date, isIncome, category, note } = req.body || {};
+
+  const validationError = validateTransactionPayload(req.body, { requireId: false });
+  if (validationError) {
+    return res.status(400).json({ error: validationError });
+  }
+
   try {
     const result = await Transaction.updateOne(
       { id },
@@ -378,7 +448,7 @@ app.put('/api/admin/transactions/:id', authenticateToken, isAdmin, async (req, r
 
 app.get('/api/admin/users', authenticateToken, isAdmin, async (req, res) => {
   try {
-    const users = await User.find({}, { username: 1, _id: 0 }); // Don't send hashed passwords
+    const users = await User.find({}, { username: 1, role: 1, _id: 0 }); // Don't send hashed passwords
     res.json(users);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -387,11 +457,16 @@ app.get('/api/admin/users', authenticateToken, isAdmin, async (req, res) => {
 
 app.delete('/api/admin/users/:username', authenticateToken, isAdmin, async (req, res) => {
   const { username } = req.params;
-  if (username === 'admin') {
-    return res.status(403).json({ error: 'Cannot delete admin account' });
-  }
-  
+
   try {
+    const target = await User.findOne({ username });
+    if (!target) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    if (target.role === 'admin') {
+      return res.status(403).json({ error: 'Cannot delete an admin account' });
+    }
+
     await Transaction.deleteMany({ username });
     const result = await User.deleteOne({ username });
     io.emit('data_changed');

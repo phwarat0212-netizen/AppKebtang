@@ -12,6 +12,8 @@ class SettingsPage extends StatelessWidget {
   Future<void> _logout(BuildContext context) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('saved_user');
+    await prefs.remove('user_role');
+    await SecureTokenStorage.clear();
     if (context.mounted) {
       Navigator.pushAndRemoveUntil(
         context,
