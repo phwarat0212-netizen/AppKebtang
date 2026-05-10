@@ -27,12 +27,12 @@
 
 คุณสามารถดาวน์โหลดไฟล์ติดตั้ง (.apk) เวอร์ชันล่าสุดได้ที่นี่:
 
-👉 **[ดาวน์โหลด Kebtang v2.0.2 APK](https://github.com/phwarat0212-netizen/AppKebtang/releases/download/v2.0.2/kebtang-v2.0.2.apk)**
+👉 **[คลิกเพื่อไปที่หน้าดาวน์โหลด (Releases Page)](https://github.com/phwarat0212-netizen/AppKebtang/releases/latest)**
 
-หรือเลือกดาวน์โหลดเวอร์ชันอื่นๆ ได้ที่ [Releases page](https://github.com/phwarat0212-netizen/AppKebtang/releases)
+*หมายเหตุ: หากลิงก์ดาวน์โหลดโดยตรงมีปัญหา โปรดเลือกโหลดไฟล์ `kebtang-v2.0.2.apk` จากส่วน Assets ในหน้าดังกล่าว*
 
 ### 📱 วิธีติดตั้ง
-1. ดาวน์โหลดไฟล์ `kebtang-v2.0.2.apk` ลงในมือถือ Android
+1. ดาวน์โหลดไฟล์ APK ลงในมือถือ Android
 2. หากติดตั้งไม่ได้ ให้ไปที่ "ตั้งค่า" (Settings) > "ความปลอดภัย" (Security) > อนุญาต "ติดตั้งแอปจากแหล่งที่ไม่รู้จัก" (Install unknown apps)
 3. หากมีเวอร์ชันเก่าอยู่ในเครื่อง **ต้องลบแอปเก่าออกก่อน** จึงจะติดตั้งเวอร์ชันใหม่ได้
 
