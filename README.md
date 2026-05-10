@@ -22,7 +22,14 @@
 
 ## 📥 ดาวน์โหลด (Download)
 
-* [ดาวน์โหลดไฟล์ APK v2.0.1 (Kebtang_v2.0.1.apk)](https://github.com/phwarat0212-netizen/AppKebtang/raw/main/kebtang_v2.0.1.apk) (เวอร์ชันล่าสุดที่ปลอดภัยตามมาตรฐานสากล)
+[![Download Latest APK](https://img.shields.io/github/v/release/phwarat0212-netizen/AppKebtang?label=Download%20APK&style=for-the-badge&logo=android&color=00C896)](https://github.com/phwarat0212-netizen/AppKebtang/releases/latest)
+
+กดปุ่มด้านบนเพื่อไปยังหน้าดาวน์โหลดเวอร์ชันล่าสุด หรือเข้าตรงที่ [Releases page](https://github.com/phwarat0212-netizen/AppKebtang/releases/latest)
+
+### วิธีติดตั้ง
+1. ดาวน์โหลดไฟล์ `.apk` จากหน้า Releases
+2. เปิดไฟล์บนมือถือ Android — อาจต้องอนุญาต "Install from unknown sources"
+3. กดติดตั้ง
 
 ---
 *พัฒนาภายใต้มาตรฐานความปลอดภัย OWASP & NIST*
