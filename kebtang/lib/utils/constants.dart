@@ -95,3 +95,23 @@ class ApiConfig {
     }
   }
 }
+
+// ─── Category Helpers ───────────────────────────────────────────
+
+class CategoryIcons {
+  static IconData getIcon(String category) {
+    switch (category.toLowerCase()) {
+      case 'salary': return Icons.account_balance_rounded;
+      case 'freelance': return Icons.work_outline_rounded;
+      case 'bonus': return Icons.card_giftcard_rounded;
+      case 'investment': return Icons.trending_up_rounded;
+      case 'food': return Icons.restaurant_rounded;
+      case 'travel': return Icons.directions_car_rounded;
+      case 'shopping': return Icons.shopping_bag_rounded;
+      case 'bill': return Icons.receipt_long_rounded;
+      case 'entertainment': return Icons.sports_esports_rounded;
+      case 'health': return Icons.medical_services_rounded;
+      default: return Icons.more_horiz_rounded;
+    }
+  }
+}

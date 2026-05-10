@@ -53,23 +53,128 @@ class _SummaryPageState extends State<SummaryPage> {
         backgroundColor: Colors.transparent,
         elevation: 0,
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          children: [
-            _buildFilterTabs(),
-            const SizedBox(height: 16),
-            Text(
-              rangeText,
-              style: TextStyle(color: isDark ? kTextSecondary : Colors.grey[600], fontSize: 14, fontWeight: FontWeight.w500),
-            ),
-            const SizedBox(height: 30),
-            _buildChart(income, expense),
-            const SizedBox(height: 40),
-            _buildStatCards(income, expense),
-          ],
+      body: RefreshIndicator(
+        onRefresh: () => widget.appState.refreshData(),
+        color: kAccentGreen,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            children: [
+              _buildFilterTabs(),
+              const SizedBox(height: 16),
+              Text(
+                rangeText,
+                style: TextStyle(color: isDark ? kTextSecondary : Colors.grey[600], fontSize: 14, fontWeight: FontWeight.w500),
+              ),
+              const SizedBox(height: 30),
+              _buildChart(income, expense),
+              const SizedBox(height: 40),
+              _buildStatCards(income, expense),
+              if (expense > 0) ...[
+                const SizedBox(height: 40),
+                _buildCategoryBreakdown(transactions.where((t) => !t.isIncome).toList()),
+              ],
+            ],
+          ),
         ),
       ),
+    );
+  }
+
+  Widget _buildCategoryBreakdown(List<Transaction> expenses) {
+    final langState = Provider.of<LanguageState>(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
+    // Group by category
+    final Map<String, double> categories = {};
+    for (var tx in expenses) {
+      categories[tx.category] = (categories[tx.category] ?? 0) + tx.amount;
+    }
+
+    final sorted = categories.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+    final totalExpense = expenses.fold(0.0, (sum, t) => sum + t.amount);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              langState.t('expense_by_category'), // Need translation
+              style: TextStyle(color: isDark ? kTextPrimary : Colors.black87, fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            Icon(Icons.pie_chart_rounded, color: isDark ? kTextSecondary : Colors.grey[400]),
+          ],
+        ),
+        const SizedBox(height: 20),
+        ListView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: sorted.length,
+          itemBuilder: (context, i) {
+            final entry = sorted[i];
+            final percent = (entry.value / totalExpense * 100);
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(color: kAccentRed.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
+                        child: Icon(CategoryIcons.getIcon(entry.key), size: 18, color: kAccentRed),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  langState.t(entry.key.toLowerCase()),
+                                  style: TextStyle(color: isDark ? kTextPrimary : Colors.black87, fontWeight: FontWeight.bold),
+                                ),
+                                Text(
+                                  '฿${formatNum(entry.value)}',
+                                  style: TextStyle(color: isDark ? kTextPrimary : Colors.black87, fontWeight: FontWeight.bold),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(4),
+                              child: LinearProgressIndicator(
+                                value: percent / 100,
+                                minHeight: 6,
+                                backgroundColor: isDark ? Colors.black26 : Colors.grey[200],
+                                valueColor: const AlwaysStoppedAnimation<Color>(kAccentRed),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      SizedBox(
+                        width: 40,
+                        child: Text(
+                          '${percent.toStringAsFixed(0)}%',
+                          textAlign: TextAlign.right,
+                          style: const TextStyle(color: kTextSecondary, fontSize: 12),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+      ],
     );
   }
 

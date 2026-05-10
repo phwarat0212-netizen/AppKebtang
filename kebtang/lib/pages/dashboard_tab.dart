@@ -23,16 +23,93 @@ class DashboardTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SafeArea(
-      child: CustomScrollView(
-        slivers: [
-          SliverToBoxAdapter(child: _buildHeader(context)),
-          SliverToBoxAdapter(child: _buildBalanceCard(context)),
-          SliverToBoxAdapter(child: _buildSummaryCards(context)),
-          SliverToBoxAdapter(child: _buildActionButtons(context)),
-          SliverToBoxAdapter(child: _buildRecentTitle(context)),
-          _buildRecentList(context),
-        ],
+      child: RefreshIndicator(
+        onRefresh: () => appState.refreshData(),
+        color: kAccentGreen,
+        child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
+            SliverToBoxAdapter(child: _buildHeader(context)),
+            SliverToBoxAdapter(child: _buildBalanceCard(context)),
+            SliverToBoxAdapter(child: _buildBudgetCard(context)),
+            SliverToBoxAdapter(child: _buildSummaryCards(context)),
+            SliverToBoxAdapter(child: _buildActionButtons(context)),
+            SliverToBoxAdapter(child: _buildRecentTitle(context)),
+            _buildRecentList(context),
+          ],
+        ),
       ),
+    );
+  }
+
+  // ── Budget Card ────────────────────────────────────────────────
+  Widget _buildBudgetCard(BuildContext context) {
+    return ListenableBuilder(
+      listenable: appState,
+      builder: (context, _) {
+        final budget = appState.budget;
+        if (budget <= 0) return const SizedBox();
+
+        final expense = appState.totalExpense;
+        final progress = (expense / budget).clamp(0.0, 1.0);
+        final isOver = expense > budget;
+        final langState = Provider.of<LanguageState>(context);
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+          child: Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: isDark ? kCard : Colors.white,
+              borderRadius: BorderRadius.circular(24),
+              boxShadow: isDark ? [] : [
+                BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 4))
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(langState.t('monthly_budget'), style: const TextStyle(color: kTextSecondary, fontSize: 13)),
+                    Text(
+                      '${(progress * 100).toStringAsFixed(0)}%',
+                      style: TextStyle(color: isOver ? kAccentRed : kAccentBlue, fontWeight: FontWeight.bold, fontSize: 13),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: LinearProgressIndicator(
+                    value: progress,
+                    minHeight: 10,
+                    backgroundColor: isDark ? Colors.black26 : Colors.grey[200],
+                    valueColor: AlwaysStoppedAnimation<Color>(isOver ? kAccentRed : kAccentBlue),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      '฿${formatNum(expense)} / ฿${formatNum(budget)}',
+                      style: TextStyle(color: isDark ? kTextPrimary : Colors.black87, fontSize: 14, fontWeight: FontWeight.w600),
+                    ),
+                    if (isOver)
+                      Text(
+                        langState.t('over_budget'),
+                        style: const TextStyle(color: kAccentRed, fontSize: 12, fontWeight: FontWeight.bold),
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 

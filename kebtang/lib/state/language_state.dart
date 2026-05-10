@@ -110,6 +110,12 @@ class LanguageState extends ChangeNotifier {
       'has_account': 'มีบัญชีอยู่แล้ว?',
       'register_success': 'สมัครสมาชิกสำเร็จ กรุณาเข้าสู่ระบบ',
       'register_failed': 'เกิดข้อผิดพลาดในการสมัครสมาชิก',
+      'search_hint': 'ค้นหารายการ...',
+      'monthly_budget': 'งบประมาณรายเดือน',
+      'over_budget': 'เกินงบประมาณ!',
+      'set_budget': 'ตั้งค่ารายจ่ายที่ตั้งเป้าไว้',
+      'budget_hint': 'ป้อนตัวเลขงบประมาณ',
+      'expense_by_category': 'รายจ่ายแยกตามหมวดหมู่',
     },
     'en': {
       'app_title': 'Expense Tracker',
@@ -198,6 +204,12 @@ class LanguageState extends ChangeNotifier {
       'has_account': 'Already have an account?',
       'register_success': 'Registration successful! Please login.',
       'register_failed': 'Registration failed. Please try again.',
+      'search_hint': 'Search transactions...',
+      'monthly_budget': 'Monthly Budget',
+      'over_budget': 'Over Budget!',
+      'set_budget': 'Set Monthly Budget',
+      'budget_hint': 'Enter budget amount',
+      'expense_by_category': 'Expense by Category',
     },
     'zh': {
       'app_title': '记账本',
@@ -286,6 +298,12 @@ class LanguageState extends ChangeNotifier {
       'has_account': '已有账号？',
       'register_success': '注册成功！请登录。',
       'register_failed': '注册失败。请重试。',
+      'search_hint': '搜索交易...',
+      'monthly_budget': '每月预算',
+      'over_budget': '超出预算！',
+      'set_budget': '设置每月预算',
+      'budget_hint': '输入预算金额',
+      'expense_by_category': '按类别支出',
     },
   };
 

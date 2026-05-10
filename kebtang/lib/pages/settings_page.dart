@@ -7,7 +7,8 @@ import '../utils/constants.dart';
 import 'login_page.dart';
 
 class SettingsPage extends StatelessWidget {
-  const SettingsPage({super.key});
+  final bool showAppBar;
+  const SettingsPage({super.key, this.showAppBar = true});
 
   Future<void> _logout(BuildContext context) async {
     final prefs = await SharedPreferences.getInstance();
@@ -29,6 +30,26 @@ class SettingsPage extends StatelessWidget {
     final langState = Provider.of<LanguageState>(context);
     final isDark = themeState.isDarkMode;
 
+    final content = ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        _buildSection(langState.t('language')),
+        _buildLanguageTile(context, langState, isDark),
+        const SizedBox(height: 24),
+        _buildSection(langState.t('monthly_budget')),
+        _buildBudgetTile(context, langState, isDark),
+        const SizedBox(height: 24),
+        _buildSection(langState.t('dark_mode')),
+        _buildThemeTile(themeState, isDark, langState),
+        const SizedBox(height: 24),
+        _buildSection(langState.t('logout')),
+        _buildLogoutTile(context, langState),
+        const SizedBox(height: 24),
+      ],
+    );
+
+    if (!showAppBar) return content;
+
     return Scaffold(
       appBar: AppBar(
         title: Text(langState.t('settings'), style: const TextStyle(fontWeight: FontWeight.bold)),
@@ -36,18 +57,77 @@ class SettingsPage extends StatelessWidget {
         elevation: 0,
         backgroundColor: Colors.transparent,
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          _buildSection(langState.t('language')),
-          _buildLanguageTile(context, langState, isDark),
-          const SizedBox(height: 24),
-          _buildSection(langState.t('dark_mode')),
-          _buildThemeTile(themeState, isDark, langState),
-          const SizedBox(height: 24),
-          _buildSection(langState.t('logout')),
-          _buildLogoutTile(context, langState),
-          const SizedBox(height: 24),
+      body: content,
+    );
+  }
+
+  Widget _buildBudgetTile(BuildContext context, LanguageState langState, bool isDark) {
+    final appState = Provider.of<AppState>(context);
+    final budget = appState.budget;
+
+    return Card(
+      elevation: 0,
+      color: isDark ? kCard : Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: ListTile(
+        leading: const Icon(Icons.account_balance_wallet_outlined, color: kAccentGreen),
+        title: Text(langState.t('monthly_budget')),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('฿${formatNum(budget)}', style: const TextStyle(color: kTextSecondary)),
+            const Icon(Icons.chevron_right_rounded, color: kTextSecondary),
+          ],
+        ),
+        onTap: () => _showBudgetDialog(context, langState, appState, isDark),
+      ),
+    );
+  }
+
+  void _showBudgetDialog(BuildContext context, LanguageState langState, AppState appState, bool isDark) {
+    final ctrl = TextEditingController(text: appState.budget.toString());
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: isDark ? kCard : Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(langState.t('set_budget'), style: const TextStyle(fontWeight: FontWeight.bold)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: ctrl,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              autofocus: true,
+              style: TextStyle(color: isDark ? kTextPrimary : Colors.black87),
+              decoration: InputDecoration(
+                hintText: langState.t('budget_hint'),
+                prefixText: '฿ ',
+                filled: true,
+                fillColor: isDark ? Colors.black26 : Colors.grey[100],
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(langState.t('cancel'), style: TextStyle(color: isDark ? kTextSecondary : Colors.grey)),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final val = double.tryParse(ctrl.text) ?? 0;
+              appState.updateBudget(val);
+              Navigator.pop(ctx);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: kAccentGreen,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child: Text(langState.t('save')),
+          ),
         ],
       ),
     );

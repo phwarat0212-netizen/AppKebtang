@@ -28,7 +28,20 @@ class _HomePageState extends State<HomePage> {
     _appState.addListener(_refresh);
   }
 
-  void _refresh() => setState(() {});
+  void _refresh() {
+    if (_appState.errorMessage != null && mounted) {
+      final langState = Provider.of<LanguageState>(context, listen: false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(langState.t(_appState.errorMessage!)),
+          backgroundColor: kAccentRed,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+      _appState.clearError();
+    }
+    setState(() {});
+  }
 
   @override
   void dispose() {

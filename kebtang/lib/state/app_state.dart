@@ -14,11 +14,27 @@ class AppState extends ChangeNotifier {
 
   List<Transaction> _transactions = [];
   bool _loaded = false;
+  String? _errorMessage;
+  double _budget = 0;
   IO.Socket? _socket;
 
   AppState(this._username) {
     _loadFromBackend();
+    _loadBudget();
     _initSocket();
+  }
+
+  Future<void> _loadBudget() async {
+    final prefs = await SharedPreferences.getInstance();
+    _budget = prefs.getDouble('budget_$_username') ?? 0;
+    notifyListeners();
+  }
+
+  Future<void> updateBudget(double amount) async {
+    _budget = amount;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble('budget_$_username', amount);
+    notifyListeners();
   }
 
   void _initSocket() {
@@ -44,6 +60,13 @@ class AppState extends ChangeNotifier {
 
   bool               get isLoaded     => _loaded;
   List<Transaction>  get transactions => List.unmodifiable(_transactions);
+  String?            get errorMessage => _errorMessage;
+  double             get budget       => _budget;
+
+  void clearError() {
+    _errorMessage = null;
+    notifyListeners();
+  }
 
   double get totalBalance => _transactions.fold(
     0, (sum, t) => t.isIncome ? sum + t.amount : sum - t.amount,
@@ -76,6 +99,10 @@ class AppState extends ChangeNotifier {
 
   double getIncomeOf(List<Transaction> list) => list.where((t) => t.isIncome).fold(0, (s, t) => s + t.amount);
   double getExpenseOf(List<Transaction> list) => list.where((t) => !t.isIncome).fold(0, (s, t) => s + t.amount);
+
+  Future<void> refreshData() async {
+    await _loadFromBackend();
+  }
 
   // ── Load ──────────────────────────────────────────────────────
   Future<void> _loadFromBackend() async {
@@ -119,62 +146,37 @@ class AppState extends ChangeNotifier {
 
   // ── Actions ───────────────────────────────────────────────────
   Future<void> addTransaction(Transaction transaction) async {
+    _errorMessage = null;
     _transactions.insert(0, transaction);
     notifyListeners();
 
     try {
       final headers = await ApiConfig.getHeaders();
-      await http.post(
+      final response = await http.post(
         Uri.parse('$_baseUrl/transactions/$_username'),
         headers: headers,
         body: jsonEncode(transaction.toJson()),
-      ).timeout(const Duration(seconds: 60));
+      ).timeout(const Duration(seconds: 15));
+
+      if (response.statusCode != 200 && response.statusCode != 201) {
+        _errorMessage = 'error_network';
+        await _loadFromBackend(); // Rollback/Sync
+        notifyListeners();
+      }
     } catch (e) {
-      // Error handled silently
+      _errorMessage = 'connection_error';
+      await _loadFromBackend();
+      notifyListeners();
     }
   }
 
   Future<void> removeTransaction(String id) async {
-    _transactions.removeWhere((t) => t.id == id);
-    notifyListeners();
+    _errorMessage = null;
+    final index = _transactions.indexWhere((t) => t.id == id);
+    if (index == -1) return;
 
-    try {
-      final headers = await ApiConfig.getHeaders();
-      await http.delete(
-        Uri.parse('$_baseUrl/transactions/$_username/$id'),
-        headers: headers,
-      ).timeout(const Duration(seconds: 60));
-    } catch (e) {
-      // Error handled
-    }
-  }
-
-  Future<void> updateTransaction(Transaction transaction) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('note_${transaction.id}', transaction.note);
-
-    final idx = _transactions.indexWhere((t) => t.id == transaction.id);
-    if (idx != -1) {
-      _transactions[idx] = transaction;
-      notifyListeners();
-    }
-
-    try {
-      final headers = await ApiConfig.getHeaders();
-      await http.put(
-        Uri.parse('$_baseUrl/transactions/$_username/${transaction.id}'),
-        headers: headers,
-        body: jsonEncode(transaction.toJson()),
-      ).timeout(const Duration(seconds: 60));
-      
-      await _loadFromBackend();
-    } catch (e) {
-      // Error handled
-    }
-  }
-
-  Future<void> deleteTransaction(String id) async {
-    _transactions.removeWhere((t) => t.id == id);
+    final removedItem = _transactions[index];
+    _transactions.removeAt(index);
     notifyListeners();
 
     try {
@@ -182,13 +184,97 @@ class AppState extends ChangeNotifier {
       final response = await http.delete(
         Uri.parse('$_baseUrl/transactions/$_username/$id'),
         headers: headers,
-      ).timeout(const Duration(seconds: 60));
+      ).timeout(const Duration(seconds: 15));
+
+      if (response.statusCode != 200) {
+        _errorMessage = 'error_network';
+        _transactions.insert(index, removedItem); // Rollback
+        notifyListeners();
+      }
+    } catch (e) {
+      _errorMessage = 'connection_error';
+      _transactions.insert(index, removedItem); // Rollback
+      notifyListeners();
+    }
+  }
+
+  Future<void> updateTransaction(Transaction transaction) async {
+    _errorMessage = null;
+    final prefs = await SharedPreferences.getInstance();
+    final oldNote = prefs.getString('note_${transaction.id}');
+    await prefs.setString('note_${transaction.id}', transaction.note);
+
+    final idx = _transactions.indexWhere((t) => t.id == transaction.id);
+    Transaction? oldTransaction;
+    if (idx != -1) {
+      oldTransaction = _transactions[idx];
+      _transactions[idx] = transaction;
+      notifyListeners();
+    }
+
+    try {
+      final headers = await ApiConfig.getHeaders();
+      final response = await http.put(
+        Uri.parse('$_baseUrl/transactions/$_username/${transaction.id}'),
+        headers: headers,
+        body: jsonEncode(transaction.toJson()),
+      ).timeout(const Duration(seconds: 15));
+      
+      if (response.statusCode == 200) {
+        await _loadFromBackend();
+      } else {
+        _errorMessage = 'error_network';
+        if (idx != -1 && oldTransaction != null) {
+          _transactions[idx] = oldTransaction;
+        }
+        if (oldNote != null) {
+          await prefs.setString('note_${transaction.id}', oldNote);
+        } else {
+          await prefs.remove('note_${transaction.id}');
+        }
+        notifyListeners();
+      }
+    } catch (e) {
+      _errorMessage = 'connection_error';
+      if (idx != -1 && oldTransaction != null) {
+        _transactions[idx] = oldTransaction;
+      }
+      if (oldNote != null) {
+        await prefs.setString('note_${transaction.id}', oldNote);
+      } else {
+        await prefs.remove('note_${transaction.id}');
+      }
+      notifyListeners();
+    }
+  }
+
+  Future<void> deleteTransaction(String id) async {
+    _errorMessage = null;
+    final index = _transactions.indexWhere((t) => t.id == id);
+    if (index == -1) return;
+
+    final removedItem = _transactions[index];
+    _transactions.removeAt(index);
+    notifyListeners();
+
+    try {
+      final headers = await ApiConfig.getHeaders();
+      final response = await http.delete(
+        Uri.parse('$_baseUrl/transactions/$_username/$id'),
+        headers: headers,
+      ).timeout(const Duration(seconds: 15));
 
       if (response.statusCode == 200) {
         await _loadFromBackend();
+      } else {
+        _errorMessage = 'error_network';
+        _transactions.insert(index, removedItem); // Rollback
+        notifyListeners();
       }
     } catch (e) {
-      // Error handled
+      _errorMessage = 'connection_error';
+      _transactions.insert(index, removedItem); // Rollback
+      notifyListeners();
     }
   }
 }

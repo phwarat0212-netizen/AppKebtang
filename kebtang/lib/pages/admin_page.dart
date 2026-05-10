@@ -375,14 +375,18 @@ class _AdminPageState extends State<AdminPage> with SingleTickerProviderStateMix
           ? const Center(child: CircularProgressIndicator(color: kAccentGreen))
           : _error != null
               ? Center(child: Text(_error!, style: const TextStyle(color: kAccentRed)))
-              : TabBarView(
-                  controller: _tabController,
-                  children: [
-                    _buildUsersTab(),
-                    _buildTransactionsTab(),
-                    _buildStatsTab(),
-                    const SettingsPage(),
-                  ],
+              : RefreshIndicator(
+                  onRefresh: _fetchAdminData,
+                  color: kAccentGreen,
+                  child: TabBarView(
+                    controller: _tabController,
+                    children: [
+                      _buildUsersTab(),
+                      _buildTransactionsTab(),
+                      _buildStatsTab(),
+                      const SettingsPage(showAppBar: false),
+                    ],
+                  ),
                 ),
     );
   }

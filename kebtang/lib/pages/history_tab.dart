@@ -19,11 +19,16 @@ class HistoryTab extends StatefulWidget {
 
 class _HistoryTabState extends State<HistoryTab> {
   String _filter = 'all'; // ใช้คีย์ภาษาอังกฤษเป็นค่าภายใน
+  final _searchCtrl = TextEditingController();
+  String _searchQuery = '';
 
   @override
   void initState() {
     super.initState();
     widget.appState.addListener(_refresh);
+    _searchCtrl.addListener(() {
+      setState(() => _searchQuery = _searchCtrl.text.trim().toLowerCase());
+    });
   }
 
   void _refresh() => setState(() {});
@@ -31,25 +36,121 @@ class _HistoryTabState extends State<HistoryTab> {
   @override
   void dispose() {
     widget.appState.removeListener(_refresh);
+    _searchCtrl.dispose();
     super.dispose();
   }
 
   List<Transaction> get _filtered {
-    if (_filter == 'income')  return widget.appState.transactions.where((t) =>  t.isIncome).toList();
-    if (_filter == 'expense') return widget.appState.transactions.where((t) => !t.isIncome).toList();
-    return widget.appState.transactions;
+    var items = widget.appState.transactions;
+    if (_filter == 'income')  items = items.where((t) =>  t.isIncome).toList();
+    else if (_filter == 'expense') items = items.where((t) => !t.isIncome).toList();
+
+    if (_searchQuery.isNotEmpty) {
+      items = items.where((t) => 
+        t.title.toLowerCase().contains(_searchQuery) ||
+        t.category.toLowerCase().contains(_searchQuery) ||
+        t.note.toLowerCase().contains(_searchQuery)
+      ).toList();
+    }
+    return items;
   }
 
   @override
   Widget build(BuildContext context) {
     return SafeArea(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildHeader(),
-          _buildFilterChips(),
-          Expanded(child: _buildList()),
-        ],
+      child: RefreshIndicator(
+        onRefresh: () => widget.appState.refreshData(),
+        color: kAccentGreen,
+        child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
+            SliverToBoxAdapter(child: _buildHeader()),
+            SliverToBoxAdapter(child: _buildSearchField()),
+            SliverToBoxAdapter(child: _buildFilterChips()),
+            _buildSliverList(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSearchField() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final langState = Provider.of<LanguageState>(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+      child: TextField(
+        controller: _searchCtrl,
+        style: TextStyle(color: isDark ? kTextPrimary : Colors.black87, fontSize: 14),
+        decoration: InputDecoration(
+          hintText: langState.t('search_hint'), // Need to add to LanguageState
+          hintStyle: TextStyle(color: isDark ? kTextSecondary : Colors.grey[400]),
+          prefixIcon: Icon(Icons.search_rounded, color: isDark ? kTextSecondary : Colors.grey),
+          suffixIcon: _searchQuery.isNotEmpty 
+            ? IconButton(
+                icon: const Icon(Icons.clear_rounded, size: 20),
+                onPressed: () => _searchCtrl.clear(),
+              ) 
+            : null,
+          filled: true,
+          fillColor: isDark ? kCard : Colors.white,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: isDark ? BorderSide.none : Border.all(color: Colors.grey.withValues(alpha: 0.1)),
+          ),
+          contentPadding: const EdgeInsets.symmetric(vertical: 12),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSliverList() {
+    final items = _filtered;
+    final langState = Provider.of<LanguageState>(context);
+    
+    if (items.isEmpty) {
+      return SliverFillRemaining(
+        hasScrollBody: false,
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.receipt_long_outlined, color: kTextSecondary, size: 48),
+              const SizedBox(height: 12),
+              Text(langState.t('no_data'), style: const TextStyle(color: kTextSecondary, fontSize: 16)),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return SliverPadding(
+      padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+      sliver: SliverList(
+        delegate: SliverChildBuilderDelegate(
+          (context, i) {
+            return Dismissible(
+              key: Key(items[i].id),
+              direction: DismissDirection.endToStart,
+              background: Container(
+                alignment: Alignment.centerRight,
+                padding: const EdgeInsets.only(right: 20),
+                margin: const EdgeInsets.only(bottom: 8),
+                decoration: BoxDecoration(
+                  color: kAccentRed.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: const Icon(Icons.delete_outline, color: kAccentRed),
+              ),
+              onDismissed: (_) => widget.appState.removeTransaction(items[i].id),
+              child: TransactionTile(
+                transaction: items[i],
+                appState: widget.appState,
+              ),
+            );
+          },
+          childCount: items.length,
+        ),
       ),
     );
   }
@@ -132,49 +233,6 @@ class _HistoryTabState extends State<HistoryTab> {
           );
         }).toList(),
       ),
-    );
-  }
-
-  Widget _buildList() {
-    final items = _filtered;
-    final langState = Provider.of<LanguageState>(context);
-    if (items.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.receipt_long_outlined, color: kTextSecondary, size: 48),
-            const SizedBox(height: 12),
-            Text(langState.t('no_data'), style: const TextStyle(color: kTextSecondary, fontSize: 16)),
-          ],
-        ),
-      );
-    }
-
-    return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-      itemCount: items.length,
-      itemBuilder: (context, i) {
-        return Dismissible(
-          key: Key(items[i].id),
-          direction: DismissDirection.endToStart,
-          background: Container(
-            alignment: Alignment.centerRight,
-            padding: const EdgeInsets.only(right: 20),
-            margin: const EdgeInsets.only(bottom: 8),
-            decoration: BoxDecoration(
-              color: kAccentRed.withValues(alpha: 0.2),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: const Icon(Icons.delete_outline, color: kAccentRed),
-          ),
-          onDismissed: (_) => widget.appState.removeTransaction(items[i].id),
-          child: TransactionTile(
-            transaction: items[i],
-            appState: widget.appState, // ส่ง appState ไปด้วย
-          ),
-        );
-      },
     );
   }
 }

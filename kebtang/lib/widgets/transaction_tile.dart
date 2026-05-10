@@ -193,7 +193,7 @@ class _TransactionTileState extends State<TransactionTile> with SingleTickerProv
                         borderRadius: BorderRadius.circular(14),
                       ),
                       child: Icon(
-                        isIncome ? Icons.trending_up_rounded : Icons.trending_down_rounded,
+                        CategoryIcons.getIcon(widget.transaction.category),
                         color: color,
                         size: 24,
                       ),
