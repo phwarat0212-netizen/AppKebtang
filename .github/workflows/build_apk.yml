@@ -37,18 +37,18 @@ jobs:
         working-directory: kebtang
 
       - name: Build APK
-        run: flutter build apk --release
+        run: flutter build apk --debug
         working-directory: kebtang
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest
-          name: "Latest Build"
-          body: "Automatic build from GitHub Actions. Download the APK below."
+          name: "Latest Build (Debug)"
+          body: "Automatic Debug build from GitHub Actions. Easier to install for testing."
           draft: false
           prerelease: false
-          files: kebtang/build/app/outputs/flutter-apk/app-release.apk
+          files: kebtang/build/app/outputs/flutter-apk/app-debug.apk
           make_latest: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

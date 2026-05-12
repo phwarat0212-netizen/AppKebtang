@@ -27,7 +27,7 @@
 
 คุณสามารถดาวน์โหลดไฟล์ติดตั้ง (.apk) เวอร์ชันล่าสุดได้ที่นี่:
 
-🚀 **[กดที่นี่เพื่อดาวน์โหลดไฟล์ APK ทันที](https://github.com/phwarat0212-netizen/AppKebtang/releases/latest/download/app-release.apk)**
+🚀 **[กดที่นี่เพื่อดาวน์โหลดไฟล์ APK (Debug) ทันที](https://github.com/phwarat0212-netizen/AppKebtang/releases/latest/download/app-debug.apk)**
 
 ### 🔍 ข้อมูลไฟล์ (File Info)
 *   **ชื่อไฟล์:** `kebtang-v2.0.2.apk`
