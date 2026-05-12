@@ -1,0 +1,54 @@
+name: Build and Release APK
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+
+      - name: Create .env file
+        run: |
+          echo "API_BASE_URL=https://kebtang-api.onrender.com/api" > .env
+          echo "SOCKET_URL=https://kebtang-api.onrender.com" >> .env
+        working-directory: kebtang
+
+      - name: Get dependencies
+        run: flutter pub get
+        working-directory: kebtang
+
+      - name: Build APK
+        run: flutter build apk --release
+        working-directory: kebtang
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: "Latest Build"
+          body: "Automatic build from GitHub Actions. Download the APK below."
+          draft: false
+          prerelease: false
+          files: kebtang/build/app/outputs/flutter-apk/app-release.apk
+          make_latest: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
