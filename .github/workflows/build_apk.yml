@@ -44,8 +44,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest
-          name: "Latest Build (Debug)"
-          body: "Automatic Debug build from GitHub Actions. Easier to install for testing."
+          name: "Version 2.0.1 (Stable Old)"
+          body: "This is the original version 2.0.1 code, built as a Debug APK for easy installation."
           draft: false
           prerelease: false
           files: kebtang/build/app/outputs/flutter-apk/app-debug.apk
