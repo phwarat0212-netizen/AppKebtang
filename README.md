@@ -1,4 +1,4 @@
-﻿# AppKebtang
+# AppKebtang
 
 แอปพลิเคชันบันทึกรายรับ-รายจ่าย (Expense Tracker)
 
@@ -27,7 +27,7 @@
 
 คุณสามารถดาวน์โหลดไฟล์ติดตั้ง (.apk) เวอร์ชันล่าสุดได้ที่นี่:
 
-👉 **[คลิกเพื่อไปที่หน้าดาวน์โหลด (Releases Page)](https://github.com/phwarat0212-netizen/AppKebtang/releases/latest)**
+🚀 **[กดที่นี่เพื่อดาวน์โหลดไฟล์ APK ทันที](https://github.com/phwarat0212-netizen/AppKebtang/releases/latest/download/app-release.apk)**
 
 ### 🔍 ข้อมูลไฟล์ (File Info)
 *   **ชื่อไฟล์:** `kebtang-v2.0.2.apk`

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 // Global navigator key — lets non-widget code (e.g. API helpers) trigger navigation.
 final GlobalKey<NavigatorState> appNavigatorKey = GlobalKey<NavigatorState>();
@@ -50,14 +51,8 @@ class SecureTokenStorage {
 
 // ─── API Config ───────────────────────────────────────────────────
 class ApiConfig {
-  // URL ของเซิร์ฟเวอร์บน Render
-  static String get baseUrl {
-    return 'https://kebtang-api.onrender.com/api';
-  }
-
-  static String get socketUrl {
-    return 'https://kebtang-api.onrender.com';
-  }
+  static String get baseUrl => dotenv.get('API_BASE_URL', fallback: 'https://kebtang-api.onrender.com/api');
+  static String get socketUrl => dotenv.get('SOCKET_URL', fallback: 'https://kebtang-api.onrender.com');
 
   // Helper to get headers with JWT
   static Future<Map<String, String>> getHeaders() async {
@@ -66,6 +61,7 @@ class ApiConfig {
     return {
       'Content-Type': 'application/json',
       if (token != null) 'Authorization': 'Bearer $token',
+      'bypass-tunnel-reminder': 'true',
     };
   }
 

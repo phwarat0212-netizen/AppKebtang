@@ -1,9 +1,13 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:provider/provider.dart'; // เพิ่ม Provider
-import '../state/language_state.dart'; // เพิ่ม LanguageState
+import 'package:provider/provider.dart';
+import '../state/language_state.dart';
+import '../state/theme_state.dart';
 import '../utils/constants.dart';
+import 'login_page.dart';
+
+// ─── Register Page ───────────────────────────────────────────────
 
 class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});
@@ -12,265 +16,217 @@ class RegisterPage extends StatefulWidget {
   State<RegisterPage> createState() => _RegisterPageState();
 }
 
-class _RegisterPageState extends State<RegisterPage> with SingleTickerProviderStateMixin {
+class _RegisterPageState extends State<RegisterPage> {
   final _userCtrl = TextEditingController();
   final _passCtrl = TextEditingController();
-  final _confirmPassCtrl = TextEditingController();
-
-  bool _obscure = true;
-  bool _loading = false;
-  String? _error;
-
-  late AnimationController _animCtrl;
-  late Animation<double> _fadeAnim;
-
-  @override
-  void initState() {
-    super.initState();
-    _animCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 900))..forward();
-    _fadeAnim = CurvedAnimation(parent: _animCtrl, curve: Curves.easeOut);
-  }
-
-  @override
-  void dispose() {
-    _animCtrl.dispose();
-    _userCtrl.dispose();
-    _passCtrl.dispose();
-    _confirmPassCtrl.dispose();
-    super.dispose();
-  }
+  final _confCtrl = TextEditingController();
+  bool _isLoading = false;
+  bool _obscurePass = true;
+  bool _obscureConf = true;
 
   Future<void> _register() async {
-    final langState = Provider.of<LanguageState>(context, listen: false);
     final user = _userCtrl.text.trim();
-    final pass = _passCtrl.text;
-    final confirmPass = _confirmPassCtrl.text;
+    final pass = _passCtrl.text.trim();
+    final conf = _confCtrl.text.trim();
 
-    if (user.isEmpty || pass.isEmpty) {
-      setState(() => _error = 'fields_required');
+    if (user.isEmpty || pass.isEmpty || conf.isEmpty) {
+      _showError('error_fields');
       return;
     }
-
-    // Regex สำหรับภาษาอังกฤษ ตัวเลข และอักษรพิเศษเท่านั้น (ไม่อนุญาตภาษาไทยหรือภาษาอื่น)
-    final validChars = RegExp(r'^[a-zA-Z0-9!@#$%^&*(),.?":{}|<>+=\-_\[\]\\\/ ]+$');
-    
-    if (!validChars.hasMatch(user)) {
-      setState(() => _error = 'error_lang_limit');
+    if (pass != conf) {
+      _showError('error_pass_match');
       return;
     }
-    
-    if (!validChars.hasMatch(pass)) {
-      setState(() => _error = 'error_lang_limit');
-      return;
-    }
-
     if (pass.length < 8) {
-      setState(() => _error = 'error_pass_short');
+      _showError('error_pass_short');
       return;
     }
 
-    if (pass.toLowerCase() == user.toLowerCase()) {
-      setState(() => _error = 'error_pass_same_user');
-      return;
-    }
-
-    if (pass != confirmPass) {
-      setState(() => _error = 'error_pass_match');
-      return;
-    }
-
-    setState(() { _loading = true; _error = null; });
+    setState(() => _isLoading = true);
 
     try {
-      final headers = await ApiConfig.getHeaders();
       final response = await http.post(
         Uri.parse('${ApiConfig.baseUrl}/register'),
-        headers: headers,
+        headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'username': user, 'password': pass}),
-      ).timeout(
-        const Duration(seconds: 60),
-        onTimeout: () => throw Exception('timeout'),
-      );
+      ).timeout(const Duration(seconds: 15));
 
-      if (!mounted) return;
-
-      if (response.statusCode == 201) {
-        // Success
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(langState.t('register_success')), backgroundColor: kAccentGreen),
-        );
-        Navigator.pop(context); // Go back to login page
+      if (response.statusCode == 200) {
+        _showSuccess('register_success');
+        if (!mounted) return;
+        Navigator.pop(context); // Return to login
       } else {
-        setState(() {
-          _error = 'register_failed';
-        });
+        final data = jsonDecode(response.body);
+        _showError(data['error'] ?? 'register_failed');
       }
     } catch (e) {
-      setState(() {
-        if (e.toString().contains('timeout')) {
-          _error = 'timeout_error';
-        } else {
-          _error = 'connection_error';
-        }
-      });
+      _showError('connection_error');
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  void _showError(String key) {
+    if (!mounted) return;
+    final lang = Provider.of<LanguageState>(context, listen: false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(lang.t(key)), backgroundColor: kAccentRed, behavior: SnackBarBehavior.floating),
+    );
+  }
+
+  void _showSuccess(String key) {
+    if (!mounted) return;
+    final lang = Provider.of<LanguageState>(context, listen: false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(lang.t(key)), backgroundColor: kAccentGreen, behavior: SnackBarBehavior.floating),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final langState = Provider.of<LanguageState>(context);
+    final isDark = Provider.of<ThemeState>(context).isDarkMode;
+
     return Scaffold(
-      backgroundColor: kBg,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        iconTheme: const IconThemeData(color: kTextPrimary),
-      ),
-      body: FadeTransition(
-        opacity: _fadeAnim,
+      appBar: AppBar(backgroundColor: Colors.transparent, elevation: 0),
+      extendBodyBehindAppBar: true,
+      body: Container(
+        width: double.infinity,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: isDark 
+              ? [const Color(0xFF1A1A2E), kBg] 
+              : [const Color(0xFFE2E8F0), const Color(0xFFEDF2F7)],
+          ),
+        ),
         child: SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 28),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SizedBox(height: 20),
-                Center(
-                  child: Text(langState.t('register'),
-                    style: const TextStyle(color: kTextPrimary, fontSize: 28, fontWeight: FontWeight.w800)),
-                ),
-                const SizedBox(height: 6),
-                Center(
-                  child: Text(langState.t('register_subtitle'),
-                    style: const TextStyle(color: kTextSecondary, fontSize: 14)),
-                ),
-                const SizedBox(height: 48),
-                _RegisterField(
-                  controller: _userCtrl,
-                  label: langState.t('username_label'),
-                  hint: langState.t('username_hint'),
-                  icon: Icons.person_outline_rounded,
-                ),
-                const SizedBox(height: 16),
-                _RegisterField(
-                  controller: _passCtrl,
-                  label: langState.t('password_label'),
-                  hint: langState.t('password_hint'),
-                  icon: Icons.lock_outline_rounded,
-                  obscure: _obscure,
-                  suffixIcon: IconButton(
-                    icon: Icon(
-                      _obscure ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                      color: kTextSecondary, size: 20,
-                    ),
-                    onPressed: () => setState(() => _obscure = !_obscure),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                _RegisterField(
-                  controller: _confirmPassCtrl,
-                  label: langState.t('confirm_password_label'),
-                  hint: langState.t('confirm_password_hint'),
-                  icon: Icons.lock_outline_rounded,
-                  obscure: _obscure,
-                ),
-                if (_error != null) ...[
-                  const SizedBox(height: 14),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 32),
+            child: SingleChildScrollView(
+              child: Column(
+                children: [
+                  const SizedBox(height: 20),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    padding: const EdgeInsets.all(20),
                     decoration: BoxDecoration(
-                      color: kAccentRed.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: kAccentRed.withValues(alpha: 0.4)),
+                      color: kAccentBlue.withValues(alpha: 0.1),
+                      shape: BoxShape.circle,
                     ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.error_outline_rounded, color: kAccentRed, size: 18),
-                        const SizedBox(width: 8),
-                        Expanded(child: Text(langState.t(_error!), style: const TextStyle(color: kAccentRed, fontSize: 13))),
-                      ],
+                    child: const Icon(Icons.person_add_rounded, size: 64, color: kAccentBlue),
+                  ),
+                  const SizedBox(height: 24),
+                  Text(langState.t('register'), 
+                    style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
+                  const SizedBox(height: 8),
+                  Text(langState.t('register_subtitle'), 
+                    style: TextStyle(color: isDark ? kTextSecondary : Colors.grey[600], fontSize: 14)),
+                  const SizedBox(height: 40),
+
+                  // Fields
+                  _buildField(
+                    controller: _userCtrl,
+                    label: langState.t('username_label'),
+                    hint: langState.t('username_hint'),
+                    icon: Icons.person_outline_rounded,
+                    isDark: isDark,
+                  ),
+                  const SizedBox(height: 16),
+                  _buildField(
+                    controller: _passCtrl,
+                    label: langState.t('password_label'),
+                    hint: langState.t('password_hint'),
+                    icon: Icons.lock_outline_rounded,
+                    isDark: isDark,
+                    obscure: _obscurePass,
+                    suffix: IconButton(
+                      icon: Icon(_obscurePass ? Icons.visibility_off_rounded : Icons.visibility_rounded, size: 20, color: kTextSecondary),
+                      onPressed: () => setState(() => _obscurePass = !_obscurePass),
                     ),
                   ),
+                  const SizedBox(height: 16),
+                  _buildField(
+                    controller: _confCtrl,
+                    label: langState.t('confirm_password_label'),
+                    hint: langState.t('confirm_password_hint'),
+                    icon: Icons.lock_reset_rounded,
+                    isDark: isDark,
+                    obscure: _obscureConf,
+                    suffix: IconButton(
+                      icon: Icon(_obscureConf ? Icons.visibility_off_rounded : Icons.visibility_rounded, size: 20, color: kTextSecondary),
+                      onPressed: () => setState(() => _obscureConf = !_obscureConf),
+                    ),
+                  ),
+                  const SizedBox(height: 32),
+
+                  // Register Button
+                  SizedBox(
+                    width: double.infinity, height: 56,
+                    child: ElevatedButton(
+                      onPressed: _isLoading ? null : _register,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: kAccentBlue,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        elevation: 0,
+                      ),
+                      child: _isLoading 
+                        ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                        : Text(langState.t('register_btn'), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // Back to Login
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(langState.t('has_account'), style: TextStyle(color: isDark ? kTextSecondary : Colors.grey[600])),
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: Text(langState.t('login_btn'), style: const TextStyle(color: kAccentBlue, fontWeight: FontWeight.bold)),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 40),
                 ],
-                const SizedBox(height: 32),
-                SizedBox(
-                  width: double.infinity, height: 56,
-                  child: ElevatedButton(
-                    onPressed: _loading ? null : _register,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: kAccentBlue,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-                      elevation: 0,
-                    ),
-                    child: _loading
-                      ? const SizedBox(width: 22, height: 22,
-                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
-                      : Text(langState.t('register_btn'), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                  ),
-                ),
-                const SizedBox(height: 24),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(langState.t('has_account'), style: const TextStyle(color: kTextSecondary)),
-                    TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: Text(langState.t('login_btn'), style: const TextStyle(color: kAccentBlue, fontWeight: FontWeight.bold)),
-                    ),
-                  ],
-                ),
-              ],
+              ),
             ),
           ),
         ),
       ),
     );
   }
-}
 
-// ─── Register Field Widget ───────────────────────────────────────────
-
-class _RegisterField extends StatelessWidget {
-  final TextEditingController  controller;
-  final String                 label;
-  final String                 hint;
-  final IconData               icon;
-  final bool                   obscure;
-  final Widget?                suffixIcon;
-
-  const _RegisterField({
-    required this.controller,
-    required this.label,
-    required this.hint,
-    required this.icon,
-    this.obscure     = false,
-    this.suffixIcon,
-  });
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _buildField({
+    required TextEditingController controller,
+    required String label,
+    required String hint,
+    required IconData icon,
+    required bool isDark,
+    bool obscure = false,
+    Widget? suffix,
+  }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(color: kTextSecondary, fontSize: 13)),
+        Text(label, style: TextStyle(color: isDark ? kTextSecondary : Colors.grey[700], fontSize: 13, fontWeight: FontWeight.w600)),
         const SizedBox(height: 8),
         TextField(
           controller: controller,
           obscureText: obscure,
-          style: const TextStyle(color: kTextPrimary, fontSize: 15),
+          style: TextStyle(color: isDark ? Colors.white : Colors.black87),
           decoration: InputDecoration(
             hintText: hint,
-            hintStyle: TextStyle(color: kTextSecondary.withValues(alpha: 0.5)),
-            prefixIcon: Icon(icon, color: kTextSecondary, size: 20),
-            suffixIcon: suffixIcon,
+            hintStyle: TextStyle(color: isDark ? kTextSecondary.withValues(alpha: 0.5) : Colors.grey[400], fontSize: 14),
+            prefixIcon: Icon(icon, color: kAccentBlue, size: 20),
+            suffixIcon: suffix,
             filled: true,
-            fillColor: kCard,
-            border: OutlineInputBorder(
+            fillColor: isDark ? kCard : Colors.white,
+            enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(14),
-              borderSide: BorderSide.none,
+              borderSide: BorderSide(color: isDark ? Colors.transparent : Colors.grey[300]!),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(14),

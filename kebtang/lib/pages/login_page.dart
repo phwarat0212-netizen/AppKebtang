@@ -2,14 +2,16 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../state/language_state.dart';
+import '../state/theme_state.dart';
 import '../utils/constants.dart';
+import '../utils/biometric_service.dart';
 import 'home_page.dart';
 import 'admin_page.dart';
 import 'register_page.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
-// ─── Login Page ───────────────────────────────────────────────────
+// ─── Login Page ──────────────────────────────────────────────────
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -18,277 +20,242 @@ class LoginPage extends StatefulWidget {
   State<LoginPage> createState() => _LoginPageState();
 }
 
-class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMixin {
+class _LoginPageState extends State<LoginPage> {
   final _userCtrl = TextEditingController();
   final _passCtrl = TextEditingController();
-
-  bool    _obscure = true;
-  bool    _loading = false;
-  String? _error;
-
-  late AnimationController _animCtrl;
-  late Animation<double>   _fadeAnim;
+  bool _isLoading = false;
+  bool _obscurePass = true;
+  bool _canBiometric = false;
+  bool _autoBiometricTriggered = false;
 
   @override
   void initState() {
     super.initState();
-    _animCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 900))..forward();
-    _fadeAnim = CurvedAnimation(parent: _animCtrl, curve: Curves.easeOut);
+    _checkBiometric();
   }
 
-  @override
-  void dispose() {
-    _animCtrl.dispose();
-    _userCtrl.dispose();
-    _passCtrl.dispose();
-    super.dispose();
+  Future<void> _checkBiometric() async {
+    final enabled = await BiometricService.isEnabled();
+    if (enabled) {
+      setState(() => _canBiometric = true);
+      // Auto-trigger biometric on startup
+      if (!_autoBiometricTriggered) {
+        _autoBiometricTriggered = true;
+        Future.delayed(const Duration(milliseconds: 500), _biometricLogin);
+      }
+    }
+  }
+
+  Future<void> _biometricLogin() async {
+    final langState = Provider.of<LanguageState>(context, listen: false);
+    final auth = await BiometricService.authenticate(langState.t('auth_reason'));
+    if (auth) {
+      final prefs = await SharedPreferences.getInstance();
+      final savedUser = prefs.getString('saved_user');
+      final savedRole = prefs.getString('user_role');
+      final token = await SecureTokenStorage.read();
+
+      if (savedUser != null && token != null) {
+        if (!mounted) return;
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => savedRole == 'admin' ? const AdminPage() : HomePage(username: savedUser),
+          ),
+        );
+      } else {
+        // If credentials missing, user must login manually
+      }
+    }
   }
 
   Future<void> _login() async {
     final user = _userCtrl.text.trim();
-    final pass = _passCtrl.text;
+    final pass = _passCtrl.text.trim();
 
     if (user.isEmpty || pass.isEmpty) {
-      setState(() => _error = 'fields_required');
+      _showError('error_fields');
       return;
     }
 
-    setState(() { _loading = true; _error = null; });
+    setState(() => _isLoading = true);
 
     try {
       final response = await http.post(
         Uri.parse('${ApiConfig.baseUrl}/login'),
-        headers: {'Content-Type': 'application/json', 'bypass-tunnel-reminder': 'true'},
+        headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'username': user, 'password': pass}),
-      ).timeout(
-        const Duration(seconds: 60),
-        onTimeout: () => throw Exception('timeout'),
-      );
-
-      if (!mounted) return;
+      ).timeout(const Duration(seconds: 15));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        final token = data['token'];
-        final role = (data['role'] as String?) ?? 'user';
-
         final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('saved_user', user);
-        await prefs.setString('user_role', role);
-        await SecureTokenStorage.write(token);
+        await prefs.setString('saved_user', data['username']);
+        await prefs.setString('user_role', data['role']);
+        await SecureTokenStorage.write(data['token']);
 
         if (!mounted) return;
-
-        if (role == 'admin') {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (_) => const AdminPage()),
-          );
-        } else {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (_) => HomePage(username: user)),
-          );
-        }
-      } else if (response.statusCode == 429) {
-        final data = jsonDecode(response.body);
-        setState(() {
-          _error = data['message'] ?? 'ลองผิดเกินขีดจำกัด กรุณารอ 30 วินาที';
-        });
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => data['role'] == 'admin' ? const AdminPage() : HomePage(username: data['username']),
+          ),
+        );
       } else {
-        setState(() {
-          _error = 'invalid_credentials';
-        });
+        final data = jsonDecode(response.body);
+        _showError(data['error'] ?? 'invalid_credentials');
       }
     } catch (e) {
-      setState(() {
-        if (e.toString().contains('timeout')) {
-          _error = 'timeout_error';
-        } else {
-          _error = 'connection_error';
-        }
-      });
+      _showError('connection_error');
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
+  void _showError(String key) {
+    if (!mounted) return;
+    final lang = Provider.of<LanguageState>(context, listen: false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(lang.t(key)), backgroundColor: kAccentRed, behavior: SnackBarBehavior.floating),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     final langState = Provider.of<LanguageState>(context);
+    final isDark = Provider.of<ThemeState>(context).isDarkMode;
+
     return Scaffold(
-      backgroundColor: kBg,
-      body: FadeTransition(
-        opacity: _fadeAnim,
+      body: Container(
+        width: double.infinity,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: isDark 
+              ? [const Color(0xFF1A1A2E), kBg] 
+              : [const Color(0xFFE2E8F0), const Color(0xFFEDF2F7)],
+          ),
+        ),
         child: SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 28),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SizedBox(height: 60),
-                // Logo
-                Center(
-                  child: Container(
-                    width: 88, height: 88,
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [kAccentGreen, kAccentBlue],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      borderRadius: BorderRadius.circular(26),
-                      boxShadow: [
-                        BoxShadow(color: kAccentGreen.withValues(alpha: 0.35), blurRadius: 30, offset: const Offset(0, 10)),
-                      ],
-                    ),
-                    child: const Icon(Icons.account_balance_wallet_rounded, color: Colors.white, size: 44),
-                  ),
-                ),
-                const SizedBox(height: 32),
-                Center(
-                  child: Text(langState.t('welcome'),
-                    style: const TextStyle(color: kTextPrimary, fontSize: 28, fontWeight: FontWeight.w800)),
-                ),
-                const SizedBox(height: 6),
-                Center(
-                  child: Text(langState.t('login_subtitle'),
-                    style: const TextStyle(color: kTextSecondary, fontSize: 14)),
-                ),
-                const SizedBox(height: 48),
-                // Username
-                _LoginField(
-                  controller: _userCtrl,
-                  label: langState.t('username_label'),
-                  hint: langState.t('username_hint'),
-                  icon: Icons.person_outline_rounded,
-                ),
-                const SizedBox(height: 16),
-                // Password
-                _LoginField(
-                  controller: _passCtrl,
-                  label: langState.t('password_label'),
-                  hint: langState.t('password_hint'),
-                  icon: Icons.lock_outline_rounded,
-                  obscure: _obscure,
-                  suffixIcon: IconButton(
-                    icon: Icon(
-                      _obscure ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                      color: kTextSecondary, size: 20,
-                    ),
-                    onPressed: () => setState(() => _obscure = !_obscure),
-                  ),
-                  onSubmitted: (_) => _login(),
-                ),
-                // Error message
-                if (_error != null) ...[
-                  const SizedBox(height: 14),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 32),
+            child: SingleChildScrollView(
+              child: Column(
+                children: [
+                  const SizedBox(height: 60),
+                  // Logo / Icon
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    padding: const EdgeInsets.all(20),
                     decoration: BoxDecoration(
-                      color: kAccentRed.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: kAccentRed.withValues(alpha: 0.4)),
+                      color: kAccentGreen.withValues(alpha: 0.1),
+                      shape: BoxShape.circle,
                     ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.error_outline_rounded, color: kAccentRed, size: 18),
-                        const SizedBox(width: 8),
-                        Expanded(child: Text(langState.t(_error!), style: const TextStyle(color: kAccentRed, fontSize: 13))),
-                      ],
+                    child: const Icon(Icons.account_balance_wallet_rounded, size: 64, color: kAccentGreen),
+                  ),
+                  const SizedBox(height: 24),
+                  Text(langState.t('welcome'), 
+                    style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87)),
+                  const SizedBox(height: 8),
+                  Text(langState.t('login_subtitle'), 
+                    style: TextStyle(color: isDark ? kTextSecondary : Colors.grey[600], fontSize: 14)),
+                  const SizedBox(height: 48),
+
+                  // Fields
+                  _buildField(
+                    controller: _userCtrl,
+                    label: langState.t('username_label'),
+                    hint: langState.t('username_hint'),
+                    icon: Icons.person_outline_rounded,
+                    isDark: isDark,
+                  ),
+                  const SizedBox(height: 16),
+                  _buildField(
+                    controller: _passCtrl,
+                    label: langState.t('password_label'),
+                    hint: langState.t('password_hint'),
+                    icon: Icons.lock_outline_rounded,
+                    isDark: isDark,
+                    obscure: _obscurePass,
+                    suffix: IconButton(
+                      icon: Icon(_obscurePass ? Icons.visibility_off_rounded : Icons.visibility_rounded, size: 20, color: kTextSecondary),
+                      onPressed: () => setState(() => _obscurePass = !_obscurePass),
                     ),
                   ),
-                ],
-                const SizedBox(height: 32),
-                // Login button
-                SizedBox(
-                  width: double.infinity, height: 56,
-                  child: ElevatedButton(
-                    onPressed: _loading ? null : _login,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: kAccentGreen,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-                      elevation: 0,
+                  const SizedBox(height: 32),
+
+                  // Login Button
+                  SizedBox(
+                    width: double.infinity, height: 56,
+                    child: ElevatedButton(
+                      onPressed: _isLoading ? null : _login,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: kAccentGreen,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        elevation: 0,
+                      ),
+                      child: _isLoading 
+                        ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                        : Text(langState.t('login_btn'), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                     ),
-                    child: _loading
-                      ? const SizedBox(width: 22, height: 22,
-                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
-                      : Text(langState.t('login_btn'), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                   ),
-                ),
-                const SizedBox(height: 24),
-                // Register link
-                Center(
-                  child: Row(
+                  const SizedBox(height: 16),
+                  if (_canBiometric)
+                    IconButton(
+                      icon: const Icon(Icons.fingerprint_rounded, size: 40, color: kAccentGreen),
+                      onPressed: _biometricLogin,
+                    ),
+                  const SizedBox(height: 16),
+
+                  // Register link
+                  Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Text('${langState.t('no_account')} ', style: const TextStyle(color: kTextSecondary)),
+                      Text(langState.t('no_account'), style: TextStyle(color: isDark ? kTextSecondary : Colors.grey[600])),
                       TextButton(
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (_) => const RegisterPage()),
-                          );
-                        },
-                        child: Text(langState.t('register_btn'), style: const TextStyle(color: kAccentBlue, fontWeight: FontWeight.bold)),
+                        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RegisterPage())),
+                        child: Text(langState.t('register_btn'), style: const TextStyle(color: kAccentGreen, fontWeight: FontWeight.bold)),
                       ),
                     ],
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
       ),
     );
   }
-}
 
-// ─── Login Field Widget ───────────────────────────────────────────
-
-class _LoginField extends StatelessWidget {
-  final TextEditingController  controller;
-  final String                 label;
-  final String                 hint;
-  final IconData               icon;
-  final bool                   obscure;
-  final Widget?                suffixIcon;
-  final ValueChanged<String>?  onSubmitted;
-
-  const _LoginField({
-    required this.controller,
-    required this.label,
-    required this.hint,
-    required this.icon,
-    this.obscure     = false,
-    this.suffixIcon,
-    this.onSubmitted,
-  });
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _buildField({
+    required TextEditingController controller,
+    required String label,
+    required String hint,
+    required IconData icon,
+    required bool isDark,
+    bool obscure = false,
+    Widget? suffix,
+  }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(color: kTextSecondary, fontSize: 13)),
+        Text(label, style: TextStyle(color: isDark ? kTextSecondary : Colors.grey[700], fontSize: 13, fontWeight: FontWeight.w600)),
         const SizedBox(height: 8),
         TextField(
           controller: controller,
           obscureText: obscure,
-          onSubmitted: onSubmitted,
-          style: const TextStyle(color: kTextPrimary, fontSize: 15),
+          style: TextStyle(color: isDark ? Colors.white : Colors.black87),
           decoration: InputDecoration(
             hintText: hint,
-            hintStyle: TextStyle(color: kTextSecondary.withValues(alpha: 0.5)),
-            prefixIcon: Icon(icon, color: kTextSecondary, size: 20),
-            suffixIcon: suffixIcon,
+            hintStyle: TextStyle(color: isDark ? kTextSecondary.withValues(alpha: 0.5) : Colors.grey[400], fontSize: 14),
+            prefixIcon: Icon(icon, color: kAccentGreen, size: 20),
+            suffixIcon: suffix,
             filled: true,
-            fillColor: kCard,
-            border: OutlineInputBorder(
+            fillColor: isDark ? kCard : Colors.white,
+            enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(14),
-              borderSide: BorderSide.none,
+              borderSide: BorderSide(color: isDark ? Colors.transparent : Colors.grey[300]!),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(14),
