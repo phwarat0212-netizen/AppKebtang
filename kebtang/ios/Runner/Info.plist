@@ -47,8 +47,6 @@
 			</array>
 		</dict>
 	</dict>
-	<key>NSFaceIDUsageDescription</key>
-	<string>แอปพลิเคชันต้องการใช้ Face ID / Fingerprint เพื่อความปลอดภัยในการเข้าถึงข้อมูลการเงินของคุณ</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>

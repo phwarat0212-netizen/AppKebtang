@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:hive_flutter/hive_flutter.dart';
 import '../models/transaction.dart';
 import '../utils/constants.dart';
 
@@ -12,79 +11,17 @@ import '../utils/constants.dart';
 class AppState extends ChangeNotifier {
   final String _username;
   String get _baseUrl => ApiConfig.baseUrl;
-  String get username => _username;
 
   List<Transaction> _transactions = [];
   bool _loaded = false;
   String? _errorMessage;
   double _budget = 0;
-  
-  // Grand Totals from Server
-  double _serverIncome = 0;
-  double _serverExpense = 0;
-  double _serverBalance = 0;
-  List<double> _serverTrend = [0, 0, 0, 0, 0, 0, 0];
-  List<Map<String, dynamic>> _monthlyTrend = [];
-  
-  // Custom Categories
-  List<String> _incomeCats = ['salary', 'freelance', 'bonus', 'investment', 'other'];
-  List<String> _expenseCats = ['food', 'travel', 'shopping', 'bill', 'entertainment', 'health', 'other'];
-  
-  // Pagination & Filter State
-  int _currentPage = 1;
-  bool _hasMore = true;
-  bool _isFetchingMore = false;
-  String _searchQuery = '';
-  String? _typeFilter; // 'income', 'expense', or null
-  DateTimeRange? _dateRange;
-  final int _limit = 50;
-
   IO.Socket? _socket;
 
   AppState(this._username) {
-    _loadFromCache(); 
-    _loadFromBackend(); 
+    _loadFromBackend();
     _loadBudget();
-    _fetchCategories();
     _initSocket();
-  }
-
-  // --- Caching Logic (Hive) ---
-  void _loadFromCache() {
-    try {
-      final box = Hive.box('cache');
-      final cachedJson = box.get('tx_$_username');
-      if (cachedJson != null) {
-        final List<dynamic> decoded = jsonDecode(cachedJson);
-        _transactions = decoded.map((e) => Transaction.fromJson(e)).toList();
-        
-        _serverIncome = box.get('income_$_username') ?? 0.0;
-        _serverExpense = box.get('expense_$_username') ?? 0.0;
-        _serverBalance = box.get('balance_$_username') ?? 0.0;
-        final trend = box.get('trend_$_username');
-        if (trend != null) _serverTrend = List<double>.from(trend);
-        
-        final mTrend = box.get('mtrend_$_username');
-        if (mTrend != null) _monthlyTrend = List<Map<String, dynamic>>.from(jsonDecode(mTrend));
-
-        _loaded = true;
-        notifyListeners();
-      }
-    } catch (e) { }
-  }
-
-  void _saveToCache() {
-    try {
-      final box = Hive.box('cache');
-      final jsonStr = jsonEncode(_transactions.take(100).map((e) => e.toJson()).toList());
-      box.put('tx_$_username', jsonStr);
-      
-      box.put('income_$_username', _serverIncome);
-      box.put('expense_$_username', _serverExpense);
-      box.put('balance_$_username', _serverBalance);
-      box.put('trend_$_username', _serverTrend);
-      box.put('mtrend_$_username', jsonEncode(_monthlyTrend));
-    } catch (e) { }
   }
 
   Future<void> _loadBudget() async {
@@ -100,183 +37,244 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> _fetchCategories() async {
-    try {
-      final headers = await ApiConfig.getHeaders();
-      final res = await http.get(Uri.parse('$_baseUrl/user/categories'), headers: headers);
-      if (res.statusCode == 200) {
-        final data = jsonDecode(res.body);
-        _incomeCats = List<String>.from(data['income']);
-        _expenseCats = List<String>.from(data['expense']);
-        notifyListeners();
-      }
-    } catch (e) { }
-  }
-
-  Future<void> updateCategories({List<String>? income, List<String>? expense}) async {
-    if (income != null) _incomeCats = income;
-    if (expense != null) _expenseCats = expense;
-    notifyListeners();
-    try {
-      final headers = await ApiConfig.getHeaders();
-      await http.put(
-        Uri.parse('$_baseUrl/user/categories'),
-        headers: headers,
-        body: jsonEncode({'income': _incomeCats, 'expense': _expenseCats}),
-      );
-    } catch (e) { }
-  }
-
   void _initSocket() {
-    _socket = IO.io(ApiConfig.socketUrl, IO.OptionBuilder().setTransports(['websocket']).disableAutoConnect().build());
+    _socket = IO.io(ApiConfig.socketUrl, IO.OptionBuilder()
+      .setTransports(['websocket'])
+      .disableAutoConnect()
+      .build()
+    );
+
     _socket?.connect();
-    _socket?.on('data_changed', (_) { _loadFromBackend(); });
+
+    _socket?.on('data_changed', (_) {
+      _loadFromBackend();
+    });
   }
 
   @override
   void dispose() {
-    _socket?.disconnect(); _socket?.dispose(); super.dispose();
+    _socket?.disconnect();
+    _socket?.dispose();
+    super.dispose();
   }
 
-  bool               get isLoaded       => _loaded;
-  bool               get hasMore        => _hasMore;
-  bool               get isFetchingMore => _isFetchingMore;
-  List<Transaction>  get transactions   => List.unmodifiable(_transactions);
-  String?            get errorMessage   => _errorMessage;
-  double             get budget         => _budget;
-
-  double get totalBalance => _serverBalance;
-  double get totalIncome  => _serverIncome;
-  double get totalExpense => _serverExpense;
-  List<double> get weeklyExpenseData => _serverTrend;
-  List<Map<String, dynamic>> get monthlyTrendData => _monthlyTrend;
-  
-  List<String> get incomeCategories => _incomeCats;
-  List<String> get expenseCategories => _expenseCats;
+  bool               get isLoaded     => _loaded;
+  List<Transaction>  get transactions => List.unmodifiable(_transactions);
+  String?            get errorMessage => _errorMessage;
+  double             get budget       => _budget;
 
   void clearError() {
     _errorMessage = null;
     notifyListeners();
   }
 
-  void setFilters({String? search, String? type, DateTimeRange? range}) {
-    bool changed = false;
-    if (search != null && _searchQuery != search) { _searchQuery = search; changed = true; }
-    if (type != _typeFilter) { _typeFilter = type; changed = true; }
-    if (range != _dateRange) { _dateRange = range; changed = true; }
-    if (changed) _loadFromBackend();
+  double get totalBalance => _transactions.fold(
+    0, (sum, t) => t.isIncome ? sum + t.amount : sum - t.amount,
+  );
+  double get totalIncome  => _transactions.where((t) =>  t.isIncome).fold(0, (s, t) => s + t.amount);
+  double get totalExpense => _transactions.where((t) => !t.isIncome).fold(0, (s, t) => s + t.amount);
+
+  // Filtered totals
+  List<Transaction> get transactionsToday {
+    final now = DateTime.now();
+    return _transactions.where((t) => 
+      t.date.year == now.year && t.date.month == now.month && t.date.day == now.day
+    ).toList();
   }
 
-  Future<void> refreshData() async { await _loadFromBackend(); }
+  List<Transaction> get transactionsThisWeek {
+    final now = DateTime.now();
+    final monday = DateTime(now.year, now.month, now.day).subtract(Duration(days: now.weekday - 1));
+    return _transactions.where((t) => 
+      t.date.isAfter(monday.subtract(const Duration(seconds: 1)))
+    ).toList();
+  }
 
+  List<Transaction> get transactionsThisMonth {
+    final now = DateTime.now();
+    return _transactions.where((t) => 
+      t.date.year == now.year && t.date.month == now.month
+    ).toList();
+  }
+
+  double getIncomeOf(List<Transaction> list) => list.where((t) => t.isIncome).fold(0, (s, t) => s + t.amount);
+  double getExpenseOf(List<Transaction> list) => list.where((t) => !t.isIncome).fold(0, (s, t) => s + t.amount);
+
+  Future<void> refreshData() async {
+    await _loadFromBackend();
+  }
+
+  // ── Load ──────────────────────────────────────────────────────
   Future<void> _loadFromBackend() async {
-    _currentPage = 1; _hasMore = true;
     try {
       final headers = await ApiConfig.getHeaders();
-      String url = '$_baseUrl/transactions/$_username?page=$_currentPage&limit=$_limit';
-      if (_searchQuery.isNotEmpty) url += '&search=${Uri.encodeComponent(_searchQuery)}';
-      if (_typeFilter == 'income') url += '&isIncome=true';
-      if (_typeFilter == 'expense') url += '&isIncome=false';
-      if (_dateRange != null) {
-        url += '&startDate=${_dateRange!.start.toIso8601String()}&endDate=${_dateRange!.end.toIso8601String()}';
-      }
+      final response = await http.get(
+        Uri.parse('$_baseUrl/transactions/$_username'),
+        headers: headers,
+      ).timeout(const Duration(seconds: 60));
 
-      final response = await http.get(Uri.parse(url), headers: headers).timeout(const Duration(seconds: 60));
-      if (ApiConfig.handleAuthError(response)) { _loaded = true; notifyListeners(); return; }
+      if (ApiConfig.handleAuthError(response)) {
+        _loaded = true;
+        notifyListeners();
+        return;
+      }
 
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final List<dynamic> txList = data['transactions'];
-        _transactions = txList.map((e) => Transaction.fromJson(e)).toList();
-        _hasMore = data['metadata']['hasMore'] ?? false;
+        final List<dynamic> decoded = jsonDecode(response.body);
+        final backendTransactions = decoded.map((e) => Transaction.fromJson(e)).toList();
         
-        final summary = data['metadata']['summary'];
-        _serverIncome = (summary['income'] as num).toDouble();
-        _serverExpense = (summary['expense'] as num).toDouble();
-        _serverBalance = (summary['balance'] as num).toDouble();
-        
-        if (summary['trend'] != null) {
-          _serverTrend = List<double>.from(summary['trend'].map((e) => (e as num).toDouble()));
-        }
-        
-        if (summary['monthlyTrend'] != null) {
-          _monthlyTrend = List<Map<String, dynamic>>.from(summary['monthlyTrend']);
-        }
-
-        if (_searchQuery.isEmpty && _typeFilter == null && _dateRange == null) _saveToCache(); 
+        final prefs = await SharedPreferences.getInstance();
+        _transactions = backendTransactions.map((tx) {
+          final localNote = prefs.getString('note_${tx.id}');
+          if ((tx.note.isEmpty || tx.note == '-') && localNote != null && localNote.isNotEmpty) {
+            return Transaction(
+              id: tx.id, title: tx.title, amount: tx.amount,
+              isIncome: tx.isIncome, date: tx.date, category: tx.category,
+              note: localNote,
+            );
+          }
+          return tx;
+        }).toList();
       }
-    } catch (e) { }
+    } catch (e) {
+      // Error handled silently for better UX
+      _transactions = [];
+    }
     _loaded = true;
     notifyListeners();
   }
 
-  Future<void> loadMore() async {
-    if (!_hasMore || _isFetchingMore) return;
-    _isFetchingMore = true;
-    notifyListeners();
-    try {
-      _currentPage++;
-      final headers = await ApiConfig.getHeaders();
-      String url = '$_baseUrl/transactions/$_username?page=$_currentPage&limit=$_limit';
-      if (_searchQuery.isNotEmpty) url += '&search=${Uri.encodeComponent(_searchQuery)}';
-      if (_typeFilter == 'income') url += '&isIncome=true';
-      if (_typeFilter == 'expense') url += '&isIncome=false';
-      if (_dateRange != null) {
-        url += '&startDate=${_dateRange!.start.toIso8601String()}&endDate=${_dateRange!.end.toIso8601String()}';
-      }
-      final response = await http.get(Uri.parse(url), headers: headers).timeout(const Duration(seconds: 30));
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final List<dynamic> txList = data['transactions'];
-        _transactions.addAll(txList.map((e) => Transaction.fromJson(e)).toList());
-        _hasMore = data['metadata']['hasMore'] ?? false;
-      }
-    } catch (e) { _hasMore = false; } finally { _isFetchingMore = false; notifyListeners(); }
-  }
-
-  // --- Actions ---
+  // ── Actions ───────────────────────────────────────────────────
   Future<void> addTransaction(Transaction transaction) async {
-    _errorMessage = null; _transactions.insert(0, transaction); notifyListeners();
+    _errorMessage = null;
+    _transactions.insert(0, transaction);
+    notifyListeners();
+
     try {
       final headers = await ApiConfig.getHeaders();
-      final response = await http.post(Uri.parse('$_baseUrl/transactions/$_username'), headers: headers, body: jsonEncode(transaction.toJson())).timeout(const Duration(seconds: 15));
-      if (response.statusCode == 200 || response.statusCode == 201) await _loadFromBackend();
-      else { _errorMessage = 'error_network'; await _loadFromBackend(); }
-    } catch (e) { _errorMessage = 'connection_error'; await _loadFromBackend(); }
+      final response = await http.post(
+        Uri.parse('$_baseUrl/transactions/$_username'),
+        headers: headers,
+        body: jsonEncode(transaction.toJson()),
+      ).timeout(const Duration(seconds: 15));
+
+      if (response.statusCode != 200 && response.statusCode != 201) {
+        _errorMessage = 'error_network';
+        await _loadFromBackend(); // Rollback/Sync
+        notifyListeners();
+      }
+    } catch (e) {
+      _errorMessage = 'connection_error';
+      await _loadFromBackend();
+      notifyListeners();
+    }
   }
 
   Future<void> removeTransaction(String id) async {
-    _errorMessage = null; final index = _transactions.indexWhere((t) => t.id == id);
+    _errorMessage = null;
+    final index = _transactions.indexWhere((t) => t.id == id);
     if (index == -1) return;
-    final removed = _transactions[index]; _transactions.removeAt(index); notifyListeners();
+
+    final removedItem = _transactions[index];
+    _transactions.removeAt(index);
+    notifyListeners();
+
     try {
       final headers = await ApiConfig.getHeaders();
-      final response = await http.delete(Uri.parse('$_baseUrl/transactions/$_username/$id'), headers: headers).timeout(const Duration(seconds: 15));
-      if (response.statusCode == 200) await _loadFromBackend();
-      else { _errorMessage = 'error_network'; _transactions.insert(index, removed); notifyListeners(); }
-    } catch (e) { _errorMessage = 'connection_error'; _transactions.insert(index, removed); notifyListeners(); }
+      final response = await http.delete(
+        Uri.parse('$_baseUrl/transactions/$_username/$id'),
+        headers: headers,
+      ).timeout(const Duration(seconds: 15));
+
+      if (response.statusCode != 200) {
+        _errorMessage = 'error_network';
+        _transactions.insert(index, removedItem); // Rollback
+        notifyListeners();
+      }
+    } catch (e) {
+      _errorMessage = 'connection_error';
+      _transactions.insert(index, removedItem); // Rollback
+      notifyListeners();
+    }
   }
 
   Future<void> updateTransaction(Transaction transaction) async {
-    _errorMessage = null; final idx = _transactions.indexWhere((t) => t.id == transaction.id);
-    Transaction? old; if (idx != -1) { old = _transactions[idx]; _transactions[idx] = transaction; notifyListeners(); }
+    _errorMessage = null;
+    final prefs = await SharedPreferences.getInstance();
+    final oldNote = prefs.getString('note_${transaction.id}');
+    await prefs.setString('note_${transaction.id}', transaction.note);
+
+    final idx = _transactions.indexWhere((t) => t.id == transaction.id);
+    Transaction? oldTransaction;
+    if (idx != -1) {
+      oldTransaction = _transactions[idx];
+      _transactions[idx] = transaction;
+      notifyListeners();
+    }
+
     try {
       final headers = await ApiConfig.getHeaders();
-      final response = await http.put(Uri.parse('$_baseUrl/transactions/$_username/${transaction.id}'), headers: headers, body: jsonEncode(transaction.toJson())).timeout(const Duration(seconds: 15));
-      if (response.statusCode == 200) await _loadFromBackend();
-      else { _errorMessage = 'error_network'; if (idx != -1 && old != null) _transactions[idx] = old; notifyListeners(); }
-    } catch (e) { _errorMessage = 'connection_error'; if (idx != -1 && old != null) _transactions[idx] = old; notifyListeners(); }
+      final response = await http.put(
+        Uri.parse('$_baseUrl/transactions/$_username/${transaction.id}'),
+        headers: headers,
+        body: jsonEncode(transaction.toJson()),
+      ).timeout(const Duration(seconds: 15));
+      
+      if (response.statusCode == 200) {
+        await _loadFromBackend();
+      } else {
+        _errorMessage = 'error_network';
+        if (idx != -1 && oldTransaction != null) {
+          _transactions[idx] = oldTransaction;
+        }
+        if (oldNote != null) {
+          await prefs.setString('note_${transaction.id}', oldNote);
+        } else {
+          await prefs.remove('note_${transaction.id}');
+        }
+        notifyListeners();
+      }
+    } catch (e) {
+      _errorMessage = 'connection_error';
+      if (idx != -1 && oldTransaction != null) {
+        _transactions[idx] = oldTransaction;
+      }
+      if (oldNote != null) {
+        await prefs.setString('note_${transaction.id}', oldNote);
+      } else {
+        await prefs.remove('note_${transaction.id}');
+      }
+      notifyListeners();
+    }
   }
 
   Future<void> deleteTransaction(String id) async {
-    _errorMessage = null; final index = _transactions.indexWhere((t) => t.id == id);
+    _errorMessage = null;
+    final index = _transactions.indexWhere((t) => t.id == id);
     if (index == -1) return;
-    final removed = _transactions[index]; _transactions.removeAt(index); notifyListeners();
+
+    final removedItem = _transactions[index];
+    _transactions.removeAt(index);
+    notifyListeners();
+
     try {
       final headers = await ApiConfig.getHeaders();
-      final response = await http.delete(Uri.parse('$_baseUrl/transactions/$_username/$id'), headers: headers).timeout(const Duration(seconds: 15));
-      if (response.statusCode == 200) await _loadFromBackend();
-      else { _errorMessage = 'error_network'; _transactions.insert(index, removed); notifyListeners(); }
-    } catch (e) { _errorMessage = 'connection_error'; _transactions.insert(index, removed); notifyListeners(); }
+      final response = await http.delete(
+        Uri.parse('$_baseUrl/transactions/$_username/$id'),
+        headers: headers,
+      ).timeout(const Duration(seconds: 15));
+
+      if (response.statusCode == 200) {
+        await _loadFromBackend();
+      } else {
+        _errorMessage = 'error_network';
+        _transactions.insert(index, removedItem); // Rollback
+        notifyListeners();
+      }
+    } catch (e) {
+      _errorMessage = 'connection_error';
+      _transactions.insert(index, removedItem); // Rollback
+      notifyListeners();
+    }
   }
 }

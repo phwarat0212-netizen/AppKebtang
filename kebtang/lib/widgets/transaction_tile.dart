@@ -1,12 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:provider/provider.dart'; // เพิ่ม Provider
 import '../models/transaction.dart';
 import '../state/app_state.dart';
 import '../state/language_state.dart'; // เพิ่ม LanguageState
 import '../utils/constants.dart';
 import '../utils/helpers.dart';
-import '../utils/biometric_service.dart';
 
 class TransactionTile extends StatefulWidget {
   final Transaction transaction;
@@ -46,6 +44,7 @@ class _TransactionTileState extends State<TransactionTile> with SingleTickerProv
   void _onHorizontalDragUpdate(DragUpdateDetails details) {
     setState(() {
       _dragExtent += details.primaryDelta!;
+      // จำกัดการเลื่อนไว้ที่ 60% ของหน้าจอตามคำขอ
       double maxDrag = MediaQuery.of(context).size.width * 0.60;
       if (_dragExtent > maxDrag) _dragExtent = maxDrag;
       if (_dragExtent < -maxDrag) _dragExtent = -maxDrag;
@@ -54,11 +53,16 @@ class _TransactionTileState extends State<TransactionTile> with SingleTickerProv
 
   void _onHorizontalDragEnd(DragEndDetails details) {
     double threshold = MediaQuery.of(context).size.width * 0.4;
+    
     if (_dragExtent > threshold) {
-      _showEditDialog();
+      // เลื่อนขวาสำเร็จ -> เปิดหมายเหตุแล้วเด้งกลับ
+      _showNoteDialog(context, Theme.of(context).brightness == Brightness.dark);
     } else if (_dragExtent < -threshold) {
+      // เลื่อนซ้ายสำเร็จ -> ถามลบ
       _showDeleteConfirm();
     }
+    
+    // เด้งกลับที่เดิมเสมอ
     _reset();
   }
 
@@ -67,22 +71,16 @@ class _TransactionTileState extends State<TransactionTile> with SingleTickerProv
       begin: _dragExtent,
       end: 0.0,
     ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
-    animation.addListener(() => setState(() => _dragExtent = animation.value));
+    
+    animation.addListener(() {
+      setState(() => _dragExtent = animation.value);
+    });
     _controller.forward(from: 0.0);
   }
 
   void _showDeleteConfirm() async {
-    final langState = Provider.of<LanguageState>(context, listen: false);
-
-    // SECURITY CHECK: Re-authenticate for Delete
-    final bioEnabled = await BiometricService.isEnabled();
-    if (bioEnabled) {
-      final auth = await BiometricService.authenticate(langState.t('auth_sensitive'));
-      if (!auth) return;
-    }
-
-    if (!mounted) return;
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final langState = Provider.of<LanguageState>(context);
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -102,19 +100,10 @@ class _TransactionTileState extends State<TransactionTile> with SingleTickerProv
         ],
       ),
     );
+
     if (confirm == true) {
       await widget.appState.deleteTransaction(widget.transaction.id);
     }
-  }
-
-  void _showEditDialog() {
-    showDialog(
-      context: context,
-      builder: (ctx) => _TransactionEditDialog(
-        transaction: widget.transaction,
-        appState: widget.appState,
-      ),
-    );
   }
 
   @override
@@ -128,24 +117,54 @@ class _TransactionTileState extends State<TransactionTile> with SingleTickerProv
       margin: const EdgeInsets.only(bottom: 12),
       child: Stack(
         children: [
+          // Background Layer (Stationary)
           Positioned.fill(
-            child: Container(
-              decoration: BoxDecoration(
-                color: _dragExtent > 0 ? kAccentBlue.withValues(alpha: 0.9) : kAccentRed.withValues(alpha: 0.9),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Row(
-                mainAxisAlignment: _dragExtent > 0 ? MainAxisAlignment.start : MainAxisAlignment.end,
-                children: [
-                  if (_dragExtent > 0) ...[
-                    const Padding(padding: EdgeInsets.only(left: 20), child: Icon(Icons.edit_rounded, color: Colors.white)),
-                  ] else ...[
-                    const Padding(padding: EdgeInsets.only(right: 20), child: Icon(Icons.delete_outline_rounded, color: Colors.white)),
-                  ],
-                ],
-              ),
+            child: Builder(
+              builder: (context) {
+                final langState = Provider.of<LanguageState>(context);
+                return Container(
+                  decoration: BoxDecoration(
+                    color: _dragExtent > 0 
+                      ? kAccentBlue.withValues(alpha: 0.9) 
+                      : kAccentRed.withValues(alpha: 0.9),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: _dragExtent > 0 
+                      ? MainAxisAlignment.start 
+                      : MainAxisAlignment.end,
+                    children: [
+                      if (_dragExtent > 0) ...[
+                        Padding(
+                          padding: const EdgeInsets.only(left: 20),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.edit_note_rounded, color: Colors.white),
+                              const SizedBox(width: 10),
+                              Text(langState.t('note'), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                            ],
+                          ),
+                        ),
+                      ] else ...[
+                        Padding(
+                          padding: const EdgeInsets.only(right: 20),
+                          child: Row(
+                            children: [
+                              Text(langState.t('delete_item'), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                              const SizedBox(width: 10),
+                              const Icon(Icons.delete_outline_rounded, color: Colors.white),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                );
+              }
             ),
           ),
+          
+          // Sliding Tile Layer
           GestureDetector(
             onHorizontalDragUpdate: _onHorizontalDragUpdate,
             onHorizontalDragEnd: _onHorizontalDragEnd,
@@ -157,29 +176,57 @@ class _TransactionTileState extends State<TransactionTile> with SingleTickerProv
                   color: isDark ? kCard : Colors.white,
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
-                    BoxShadow(color: Colors.black.withValues(alpha: _dragExtent.abs() > 0 ? 0.1 : 0.04), blurRadius: 8, offset: const Offset(0, 2))
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: _dragExtent.abs() > 0 ? 0.1 : 0.04),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    )
                   ],
                 ),
                 child: Row(
                   children: [
                     Container(
-                      width: 48, height: 48,
-                      decoration: BoxDecoration(color: color.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(14)),
-                      child: Icon(CategoryIcons.getIcon(widget.transaction.category), color: color, size: 24),
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: color.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Icon(
+                        CategoryIcons.getIcon(widget.transaction.category),
+                        color: color,
+                        size: 24,
+                      ),
                     ),
                     const SizedBox(width: 14),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(widget.transaction.title, style: TextStyle(color: isDark ? kTextPrimary : Colors.black87, fontSize: 16, fontWeight: FontWeight.w600)),
+                          Text(
+                            widget.transaction.title,
+                            style: TextStyle(
+                              color: isDark ? kTextPrimary : Colors.black87,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
                           const SizedBox(height: 2),
-                          Text('${langState.t(widget.transaction.category.toLowerCase())} • ${formatRelativeDate(widget.transaction.date, langState)}', style: TextStyle(color: isDark ? kTextSecondary : Colors.grey[600], fontSize: 12)),
+                          Text(
+                            '${langState.t(widget.transaction.category.toLowerCase())} • ${formatRelativeDate(widget.transaction.date, langState)}',
+                            style: TextStyle(
+                              color: isDark ? kTextSecondary : Colors.grey[600],
+                              fontSize: 12,
+                            ),
+                          ),
                         ],
                       ),
                     ),
                     const SizedBox(width: 8),
-                    Text('${isIncome ? '+' : '-'}฿${formatNum(widget.transaction.amount)}', style: TextStyle(color: color, fontSize: 16, fontWeight: FontWeight.bold)),
+                    Text(
+                      '${isIncome ? '+' : '-'}฿${formatNum(widget.transaction.amount)}',
+                      style: TextStyle(color: color, fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
                   ],
                 ),
               ),
@@ -189,136 +236,193 @@ class _TransactionTileState extends State<TransactionTile> with SingleTickerProv
       ),
     );
   }
+
+  void _showNoteDialog(BuildContext context, bool isDark) {
+    final color = widget.transaction.isIncome ? kAccentGreen : kAccentRed;
+    showDialog(
+      context: context,
+      builder: (ctx) => _NoteEditDialog(
+        transaction: widget.transaction,
+        appState: widget.appState,
+        isDark: isDark,
+        color: color,
+      ),
+    );
+  }
 }
 
-class _TransactionEditDialog extends StatefulWidget {
+class _NoteEditDialog extends StatefulWidget {
   final Transaction transaction;
   final AppState appState;
-  const _TransactionEditDialog({required this.transaction, required this.appState});
+  final bool isDark;
+  final Color color;
+
+  const _NoteEditDialog({
+    required this.transaction,
+    required this.appState,
+    required this.isDark,
+    required this.color,
+  });
 
   @override
-  State<_TransactionEditDialog> createState() => _TransactionEditDialogState();
+  State<_NoteEditDialog> createState() => _NoteEditDialogState();
 }
 
-class _TransactionEditDialogState extends State<_TransactionEditDialog> {
-  late TextEditingController _titleCtrl;
-  late TextEditingController _amountCtrl;
-  late TextEditingController _noteCtrl;
-  late String _selectedCategory;
-  late DateTime _selectedDate;
+class _NoteEditDialogState extends State<_NoteEditDialog> {
+  late TextEditingController _ctrl;
+  bool _isEditing = false;
   bool _isSaving = false;
-
-  final _incomeCategories  = ['salary', 'freelance', 'bonus', 'investment', 'other'];
-  final _expenseCategories = ['food', 'travel', 'shopping', 'bill', 'entertainment', 'health', 'other'];
-  List<String> get _categories => widget.transaction.isIncome ? _incomeCategories : _expenseCategories;
 
   @override
   void initState() {
     super.initState();
-    _titleCtrl = TextEditingController(text: widget.transaction.title);
-    _amountCtrl = TextEditingController(text: widget.transaction.amount.toString());
-    _noteCtrl = TextEditingController(text: widget.transaction.note);
-    _selectedCategory = widget.transaction.category;
-    _selectedDate = widget.transaction.date;
+    _ctrl = TextEditingController(text: widget.transaction.note);
   }
 
   @override
   void dispose() {
-    _titleCtrl.dispose(); _amountCtrl.dispose(); _noteCtrl.dispose();
+    _ctrl.dispose();
     super.dispose();
   }
 
   Future<void> _save() async {
-    final title = _titleCtrl.text.trim();
-    final amount = double.tryParse(_amountCtrl.text) ?? 0;
-    if (title.isEmpty || amount <= 0) return;
-
     setState(() => _isSaving = true);
     final updated = Transaction(
       id: widget.transaction.id,
-      title: title,
-      amount: amount,
+      title: widget.transaction.title,
+      amount: widget.transaction.amount,
       isIncome: widget.transaction.isIncome,
-      date: _selectedDate,
-      category: _selectedCategory,
-      note: _noteCtrl.text,
+      date: widget.transaction.date,
+      category: widget.transaction.category,
+      note: _ctrl.text,
     );
     await widget.appState.updateTransaction(updated);
-    if (mounted) Navigator.pop(context);
+    if (mounted) {
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('อัปเดตหมายเหตุเรียบร้อย'), duration: Duration(seconds: 1)),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final langState = Provider.of<LanguageState>(context);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final color = widget.transaction.isIncome ? kAccentGreen : kAccentRed;
-
     return AlertDialog(
-      backgroundColor: isDark ? kCard : Colors.white,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      backgroundColor: widget.isDark ? kCard : Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
       contentPadding: EdgeInsets.zero,
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: const BorderRadius.vertical(top: Radius.circular(24))),
-              child: Row(
-                children: [
-                  Icon(Icons.edit_rounded, color: color),
-                  const SizedBox(width: 12),
-                  Text(langState.t('edit'), style: TextStyle(color: isDark ? kTextPrimary : Colors.black87, fontSize: 18, fontWeight: FontWeight.bold)),
-                ],
+              padding: const EdgeInsets.symmetric(vertical: 24),
+              decoration: BoxDecoration(
+                color: widget.color.withValues(alpha: 0.1),
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+              ),
+              child: Center(
+                child: Column(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(color: widget.color, shape: BoxShape.circle),
+                      child: Icon(
+                        widget.transaction.isIncome ? Icons.trending_up_rounded : Icons.trending_down_rounded,
+                        color: Colors.white,
+                        size: 32,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      '${widget.transaction.isIncome ? '+' : '-'} ฿${formatNum(widget.transaction.amount)}',
+                      style: TextStyle(color: widget.color, fontSize: 28, fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ),
               ),
             ),
             Padding(
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.all(24),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _buildInput(langState.t('desc_label'), _titleCtrl, isDark),
-                  const SizedBox(height: 12),
-                  _buildInput(langState.t('amount_label'), _amountCtrl, isDark, isNumber: true),
-                  const SizedBox(height: 12),
-                  _buildInput(langState.t('note'), _noteCtrl, isDark),
-                  const SizedBox(height: 16),
-                  Text(langState.t('category'), style: const TextStyle(color: kTextSecondary, fontSize: 12)),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8, runSpacing: 8,
-                    children: _categories.map((c) {
-                      final sel = c == _selectedCategory;
-                      return GestureDetector(
-                        onTap: () => setState(() => _selectedCategory = c),
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 150),
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: sel ? color.withValues(alpha: 0.2) : (isDark ? kBg : Colors.grey[100]),
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: sel ? color : Colors.transparent),
-                          ),
-                          child: Text(langState.t(c), style: TextStyle(color: sel ? color : kTextSecondary, fontSize: 12)),
-                        ),
-                      );
-                    }).toList(),
+                  _buildDetailRow(Icons.edit_note_rounded, langState.t('summary'), widget.transaction.title, widget.isDark),
+                  const SizedBox(height: 20),
+                  Row(
+                    children: [
+                      Expanded(child: _buildDetailRow(Icons.category_rounded, langState.t('stats'), langState.t(widget.transaction.category.toLowerCase()), widget.isDark)),
+                      Expanded(child: _buildDetailRow(Icons.calendar_today_rounded, langState.t('today'), formatDate(widget.transaction.date), widget.isDark)),
+                    ],
                   ),
+                  const SizedBox(height: 20),
+                  const Divider(),
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      _buildLabelRow(Icons.description_outlined, langState.t('note'), widget.isDark),
+                      if (!_isEditing)
+                        IconButton(
+                          onPressed: () => setState(() => _isEditing = true),
+                          icon: const Icon(Icons.edit_rounded, size: 20, color: kAccentBlue),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  if (_isEditing)
+                    TextField(
+                      controller: _ctrl,
+                      maxLines: 3,
+                      autofocus: true,
+                      style: TextStyle(color: widget.isDark ? kTextPrimary : Colors.black87),
+                      decoration: InputDecoration(
+                        hintText: '${langState.t('note')}...',
+                        hintStyle: const TextStyle(color: Colors.grey, fontSize: 14),
+                        filled: true,
+                        fillColor: widget.isDark ? Colors.black26 : Colors.grey[100],
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                      ),
+                    )
+                  else
+                    Text(
+                      widget.transaction.note.isEmpty ? '-' : widget.transaction.note,
+                      style: TextStyle(
+                        color: widget.isDark ? kTextPrimary : Colors.black87,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
                 ],
               ),
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  TextButton(onPressed: () => Navigator.pop(context), child: Text(langState.t('cancel'), style: const TextStyle(color: kTextSecondary))),
-                  const SizedBox(width: 8),
-                  ElevatedButton(
-                    onPressed: _isSaving ? null : _save,
-                    style: ElevatedButton.styleFrom(backgroundColor: color, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), elevation: 0),
-                    child: _isSaving ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : Text(langState.t('save')),
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: Text(langState.t('close'), style: TextStyle(color: Colors.grey[600], fontWeight: FontWeight.bold)),
                   ),
+                  if (_isEditing) ...[
+                    const SizedBox(width: 8),
+                    ElevatedButton(
+                      onPressed: _isSaving ? null : _save,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: widget.color,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      child: _isSaving
+                          ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                          : Text(langState.t('save'), style: const TextStyle(fontWeight: FontWeight.bold)),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -328,24 +432,29 @@ class _TransactionEditDialogState extends State<_TransactionEditDialog> {
     );
   }
 
-  Widget _buildInput(String label, TextEditingController ctrl, bool isDark, {bool isNumber = false}) {
+  Widget _buildDetailRow(IconData icon, String label, String value, bool isDark) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(color: kTextSecondary, fontSize: 12)),
-        const SizedBox(height: 6),
-        TextField(
-          controller: ctrl,
-          keyboardType: isNumber ? const TextInputType.numberWithOptions(decimal: true) : TextInputType.text,
-          inputFormatters: isNumber ? [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))] : [],
-          style: TextStyle(color: isDark ? kTextPrimary : Colors.black87, fontSize: 14),
-          decoration: InputDecoration(
-            filled: true,
-            fillColor: isDark ? kBg : Colors.grey[100],
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        _buildLabelRow(icon, label, isDark),
+        const SizedBox(height: 4),
+        Padding(
+          padding: const EdgeInsets.only(left: 32),
+          child: Text(
+            value,
+            style: TextStyle(color: isDark ? kTextPrimary : Colors.black87, fontSize: 16, fontWeight: FontWeight.w500),
           ),
         ),
+      ],
+    );
+  }
+
+  Widget _buildLabelRow(IconData icon, String label, bool isDark) {
+    return Row(
+      children: [
+        Icon(icon, size: 20, color: isDark ? kTextSecondary : Colors.grey[600]),
+        const SizedBox(width: 12),
+        Text(label, style: TextStyle(color: isDark ? kTextSecondary : Colors.grey[600], fontSize: 12)),
       ],
     );
   }

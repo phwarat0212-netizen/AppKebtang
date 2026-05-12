@@ -3,7 +3,7 @@ import 'package:kebtang/models/transaction.dart';
 
 void main() {
   group('Transaction Model Tests', () {
-    test('Transaction.toJson() should return a valid Map with recurring fields', () {
+    test('Transaction.toJson() should return a valid Map', () {
       final date = DateTime(2023, 10, 27);
       final tx = Transaction(
         id: '123',
@@ -13,8 +13,6 @@ void main() {
         date: date,
         category: 'food',
         note: 'Yummy',
-        isRecurring: true,
-        frequency: 'daily',
       );
 
       final json = tx.toJson();
@@ -26,11 +24,9 @@ void main() {
       expect(json['date'], date.toIso8601String());
       expect(json['category'], 'food');
       expect(json['note'], 'Yummy');
-      expect(json['isRecurring'], true);
-      expect(json['frequency'], 'daily');
     });
 
-    test('Transaction.fromJson() should return a valid Transaction object with recurring fields', () {
+    test('Transaction.fromJson() should return a valid Transaction object', () {
       final json = {
         'id': '456',
         'title': 'Salary',
@@ -39,8 +35,6 @@ void main() {
         'date': '2023-10-28T00:00:00.000',
         'category': 'salary',
         'note': 'Monthly pay',
-        'isRecurring': true,
-        'frequency': 'monthly',
       };
 
       final tx = Transaction.fromJson(json);
@@ -52,11 +46,9 @@ void main() {
       expect(tx.date, DateTime(2023, 10, 28));
       expect(tx.category, 'salary');
       expect(tx.note, 'Monthly pay');
-      expect(tx.isRecurring, true);
-      expect(tx.frequency, 'monthly');
     });
 
-    test('Transaction.fromJson() should handle default recurring fields', () {
+    test('Transaction.fromJson() should handle missing note field', () {
       final json = {
         'id': '789',
         'title': 'Other',
@@ -69,8 +61,6 @@ void main() {
       final tx = Transaction.fromJson(json);
 
       expect(tx.note, '');
-      expect(tx.isRecurring, false);
-      expect(tx.frequency, 'none');
     });
   });
 }
