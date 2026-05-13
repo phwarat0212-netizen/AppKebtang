@@ -29,10 +29,7 @@ class _AddTransactionSheetState extends State<AddTransactionSheet> {
   String _selectedCategory = '';
   final DateTime _selectedDate = DateTime.now();
 
-  final _incomeCategories  = ['salary', 'freelance', 'bonus', 'investment', 'other'];
-  final _expenseCategories = ['food', 'travel', 'shopping', 'bill', 'entertainment', 'health', 'other'];
-
-  List<String> get _categories => widget.isIncome ? _incomeCategories : _expenseCategories;
+  List<String> get _categories => widget.isIncome ? widget.appState.incomeCategories : widget.appState.expenseCategories;
 
   @override
   void initState() {

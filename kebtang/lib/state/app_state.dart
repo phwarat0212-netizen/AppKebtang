@@ -18,9 +18,13 @@ class AppState extends ChangeNotifier {
   double _budget = 0;
   IO.Socket? _socket;
 
+  List<String> _incomeCategories = ['salary', 'freelance', 'bonus', 'investment', 'other'];
+  List<String> _expenseCategories = ['food', 'travel', 'shopping', 'bill', 'entertainment', 'health', 'other'];
+
   AppState(this._username) {
     _loadFromBackend();
     _loadBudget();
+    _loadCategories();
     _initSocket();
   }
 
@@ -34,6 +38,24 @@ class AppState extends ChangeNotifier {
     _budget = amount;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setDouble('budget_$_username', amount);
+    notifyListeners();
+  }
+
+  Future<void> _loadCategories() async {
+    final prefs = await SharedPreferences.getInstance();
+    final inc = prefs.getStringList('inc_cats_$_username');
+    final exp = prefs.getStringList('exp_cats_$_username');
+    if (inc != null) _incomeCategories = inc;
+    if (exp != null) _expenseCategories = exp;
+    notifyListeners();
+  }
+
+  Future<void> updateCategories({required List<String> income, required List<String> expense}) async {
+    _incomeCategories = income;
+    _expenseCategories = expense;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList('inc_cats_$_username', income);
+    await prefs.setStringList('exp_cats_$_username', expense);
     notifyListeners();
   }
 
@@ -58,10 +80,12 @@ class AppState extends ChangeNotifier {
     super.dispose();
   }
 
-  bool               get isLoaded     => _loaded;
-  List<Transaction>  get transactions => List.unmodifiable(_transactions);
-  String?            get errorMessage => _errorMessage;
-  double             get budget       => _budget;
+  bool               get isLoaded          => _loaded;
+  List<Transaction>  get transactions      => List.unmodifiable(_transactions);
+  String?            get errorMessage      => _errorMessage;
+  double             get budget            => _budget;
+  List<String>       get incomeCategories  => _incomeCategories;
+  List<String>       get expenseCategories => _expenseCategories;
 
   void clearError() {
     _errorMessage = null;

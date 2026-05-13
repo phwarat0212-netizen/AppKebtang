@@ -41,6 +41,9 @@ dependencies:
   socket_io_client: ^3.1.4
   fl_chart: ^0.70.2
   provider: ^6.1.1
+  pdf: ^3.11.1
+  printing: ^5.13.2
+  local_auth: ^2.3.0
 
 flutter_icons: 
   android: true
