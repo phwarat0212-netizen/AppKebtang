@@ -52,14 +52,17 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: IndexedStack(
-        index: _currentIndex,
-        children: [
-          DashboardTab(appState: _appState, username: widget.username, onLogout: () {}),
-          SummaryPage(appState: _appState),
-          HistoryTab(appState: _appState),
-          const SettingsPage(),
-        ],
+      body: ChangeNotifierProvider.value(
+        value: _appState,
+        child: IndexedStack(
+          index: _currentIndex,
+          children: [
+            DashboardTab(appState: _appState, username: widget.username, onLogout: () {}),
+            SummaryPage(appState: _appState),
+            HistoryTab(appState: _appState),
+            const SettingsPage(),
+          ],
+        ),
       ),
       bottomNavigationBar: _buildNavBar(),
     );
