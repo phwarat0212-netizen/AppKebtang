@@ -96,7 +96,7 @@ class _HistoryTabState extends State<HistoryTab> {
           fillColor: isDark ? kCard : Colors.white,
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
-            borderSide: isDark ? BorderSide.none : Border.all(color: Colors.grey.withValues(alpha: 0.1)),
+            borderSide: isDark ? BorderSide.none : BorderSide(color: Colors.grey.withValues(alpha: 0.1)),
           ),
           contentPadding: const EdgeInsets.symmetric(vertical: 12),
         ),

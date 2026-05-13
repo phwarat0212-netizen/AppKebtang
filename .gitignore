@@ -1,4 +1,39 @@
-# Build artifacts
+# Flutter/Dart
+build/
+.dart_tool/
+.packages
+.pub-cache/
+.pub/
+.env
+
+# Android
+.gradle/
+local.properties
+*.keystore
+*.jks
 *.apk
 *.aab
-*.ipa
+*.flat
+capture_content_values.json
+android/key.properties
+
+# iOS/macOS
+.generated/
+DerivedData/
+Pods/
+.symlinks/
+profile/
+*.moved-aside
+*.xcuserstate
+
+# IDEs
+.idea/
+*.iml
+.vscode/
+.history
+*.sublime-project
+*.sublime-workspace
+
+# OS files
+.DS_Store
+Thumbs.db

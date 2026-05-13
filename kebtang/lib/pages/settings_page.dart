@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../state/theme_state.dart';
-import '../state/language_state.dart'; // เพิ่ม LanguageState
+import '../state/language_state.dart';
+import '../state/app_state.dart';
 import '../utils/constants.dart';
+import '../utils/helpers.dart';
 import 'login_page.dart';
 
 class SettingsPage extends StatelessWidget {
