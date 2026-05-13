@@ -17,7 +17,7 @@
 
 ---
 
-🚀 **[กดที่นี่เพื่อดาวน์โหลดสำหรับมือถือทั่วไป (arm64-v8a)](https://github.com/phwarat0212-netizen/AppKebtang/releases/download/v2.0.1/kebtang_v2.0.1_arm64.apk)** (แนะนำ!)
+🚀 **[กดที่นี่เพื่อดาวน์โหลดสำหรับมือถือทั่วไป (arm64-v8a)](https://github.com/phwarat0212-netizen/AppKebtang/releases/download/v2.0.1/kebtang_v2.0.1_arm64.apk)** (แนะนำ)
 
 📱 **[สำหรับมือถือรุ่นเก่า (armeabi-v7a)](https://github.com/phwarat0212-netizen/AppKebtang/releases/download/v2.0.1/kebtang_v2.0.1_arm32.apk)**
 
