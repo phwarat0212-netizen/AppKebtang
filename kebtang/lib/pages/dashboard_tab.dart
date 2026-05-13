@@ -201,7 +201,7 @@ class DashboardTab extends StatelessWidget {
                 decoration: BoxDecoration(
                   gradient: gradient,
                   borderRadius: BorderRadius.circular(28),
-                  boxShadow: [BoxShadow(color: shadowColor, blurRadius: 30, offset: const Offset(0, 10))],
+                  boxShadow: [BoxShadow(color: shadowColor, blurRadius: 20, offset: const Offset(0, 8))],
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -345,7 +345,7 @@ class _ActionButton extends StatelessWidget {
             colors: [color.withValues(alpha: 0.8), color],
             begin: Alignment.topLeft, end: Alignment.bottomRight),
           borderRadius: BorderRadius.circular(18),
-          boxShadow: [BoxShadow(color: color.withValues(alpha: 0.3), blurRadius: 15, offset: const Offset(0, 6))],
+          boxShadow: [BoxShadow(color: color.withValues(alpha: 0.2), blurRadius: 10, offset: const Offset(0, 4))],
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
