@@ -37,18 +37,34 @@ jobs:
         working-directory: kebtang
 
       - name: Build APK
-        run: flutter build apk --debug
+        run: flutter build apk --release
         working-directory: kebtang
+
+      - name: Rename APK
+        run: mv kebtang/build/app/outputs/flutter-apk/app-release.apk kebtang/build/app/outputs/flutter-apk/kebtang_v2.0.1.apk
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: latest
-          name: "Version 2.0.1 (Stable Old)"
-          body: "This is the original version 2.0.1 code, built as a Debug APK for easy installation."
+          tag_name: v2.0.1
+          name: "Kebtang v2.0.1 (Stable)"
+          body: |
+            ## 🎉 New Release: Kebtang v2.0.1
+            
+            This is the stable release of the Kebtang Expense Tracker.
+            
+            ### Changes:
+            - Switched to Release build for better performance.
+            - Improved UI and language support.
+            - Cleaned up repository structure.
+            
+            ### How to install:
+            1. Download the `kebtang_v2.0.1.apk` below.
+            2. Open the file on your Android device.
+            3. Follow the prompts to install (you may need to allow "Install from unknown sources").
           draft: false
           prerelease: false
-          files: kebtang/build/app/outputs/flutter-apk/app-debug.apk
+          files: kebtang/build/app/outputs/flutter-apk/kebtang_v2.0.1.apk
           make_latest: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
