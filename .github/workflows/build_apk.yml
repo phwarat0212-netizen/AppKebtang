@@ -37,34 +37,39 @@ jobs:
         working-directory: kebtang
 
       - name: Build APK
-        run: flutter build apk --release
+        run: flutter build apk --release --split-per-abi
         working-directory: kebtang
 
-      - name: Rename APK
-        run: mv kebtang/build/app/outputs/flutter-apk/app-release.apk kebtang/build/app/outputs/flutter-apk/kebtang_v2.0.1.apk
+      - name: Rename and Prepare APKs
+        run: |
+          cp kebtang/build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk kebtang/kebtang_v2.0.1_arm32.apk
+          cp kebtang/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk kebtang/kebtang_v2.0.1_arm64.apk
+          cp kebtang/build/app/outputs/flutter-apk/app-x86_64-release.apk kebtang/kebtang_v2.0.1_x86_64.apk
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v2.0.1
-          name: "Kebtang v2.0.1 (Stable)"
+          name: "Kebtang v2.0.1 (Stable & Small)"
           body: |
-            ## 🎉 New Release: Kebtang v2.0.1
+            ## 🎉 New Release: Kebtang v2.0.1 (Optimized)
             
-            This is the stable release of the Kebtang Expense Tracker.
+            This version is optimized for size (only 5-8MB).
             
-            ### Changes:
-            - Switched to Release build for better performance.
-            - Improved UI and language support.
-            - Cleaned up repository structure.
+            ### 📥 Download the right version for your phone:
+            - **[kebtang_v2.0.1_arm64.apk](https://github.com/phwarat0212-netizen/AppKebtang/releases/download/v2.0.1/kebtang_v2.0.1_arm64.apk)** (แนะนำ! สำหรับมือถือรุ่นใหม่ส่วนใหญ่)
+            - **[kebtang_v2.0.1_arm32.apk](https://github.com/phwarat0212-netizen/AppKebtang/releases/download/v2.0.1/kebtang_v2.0.1_arm32.apk)** (สำหรับมือถือรุ่นเก่า)
             
             ### How to install:
-            1. Download the `kebtang_v2.0.1.apk` below.
-            2. Open the file on your Android device.
-            3. Follow the prompts to install (you may need to allow "Install from unknown sources").
+            1. Download the APK above.
+            2. If you have an old version, **uninstall it first**.
+            3. Install the new APK.
           draft: false
           prerelease: false
-          files: kebtang/build/app/outputs/flutter-apk/kebtang_v2.0.1.apk
+          files: |
+            kebtang/kebtang_v2.0.1_arm32.apk
+            kebtang/kebtang_v2.0.1_arm64.apk
+            kebtang/kebtang_v2.0.1_x86_64.apk
           make_latest: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
